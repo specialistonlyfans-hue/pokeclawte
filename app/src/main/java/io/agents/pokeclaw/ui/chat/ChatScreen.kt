@@ -1767,14 +1767,17 @@ private fun SidebarContent(
             }
             items(conversations.size) { index ->
                 val conv = conversations[index]
-                Surface(
+                // Per BACKLOG P3 "Rename chat session" — long-press still opens the
+                // Rename/Delete action menu (kept for power users), AND a tappable
+                // pencil icon now sits at the trailing edge for discoverability.
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .combinedClickable(
                             onClick = { onSelectConversation(conv) },
                             onLongClick = { actionTarget = conv },
                         ),
-                    color = androidx.compose.ui.graphics.Color.Transparent,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = conv.title,
@@ -1782,7 +1785,21 @@ private fun SidebarContent(
                         color = colors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 20.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                    )
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Rename conversation",
+                        tint = colors.textTertiary,
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(18.dp)
+                            .clickable {
+                                renameText = conv.title
+                                renameTarget = conv
+                            },
                     )
                 }
             }
