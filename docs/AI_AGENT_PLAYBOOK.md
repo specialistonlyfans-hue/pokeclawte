@@ -148,6 +148,16 @@ adb shell dumpsys accessibility | grep -E "Bound services|Enabled services"
 
 **Reverse:** clear all granted perms before user testing if you want a fresh-install QA.
 
+### 9.7. Don't trust the "Builder pattern" to be the runtime path
+
+v0.7.0 wired `PromptUtils.applyGlobalPrompt` into `AgentConfig.Builder.build()`. That looked like THE construction site if you read AgentConfig.kt. But the actual runtime constructor for AgentConfig is `ResolvedModelConfig.toAgentConfig()` in `ModelConfigRepository.kt`, which uses the data class constructor directly. Result: the global prompt was saved to MMKV but never injected into any LLM call. Verified via app_logs/pokeclaw-app.log — zero `PromptUtils:` entries on v0.7.0 even after MMKV showed the key present. Shipped as v0.7.1 hotfix.
+
+**Lesson**: when you wire a helper into the "API of record" (Builder, factory method, DSL), grep for ALL construction sites of the target type and patch each one. Tests may only exercise the Builder, while production goes through the constructor.
+
+```bash
+grep -rn "AgentConfig\.\|AgentConfig(\|toAgentConfig" app/src/main/java
+```
+
 ### 10. PokeClaw is a generic mobile-agent harness, NOT a missed-call product
 
 There is a SEPARATE revenue product called `~/MyGithub/missed-call-ai-chatbot-lab`. Missed-call follow-up is its scope, not PokeClaw's. PokeClaw stays generic — 21 tools × 13 rules — per `ARCHITECTURE_DECISIONS.md` D2. Do NOT add per-vertical workflows (missed call, plumber, dentist...) to PokeClaw core. If a generic primitive is needed (e.g. "phone call state read tool"), add it as a tool, not a workflow.

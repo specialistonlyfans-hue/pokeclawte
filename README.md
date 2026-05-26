@@ -420,6 +420,10 @@ Every star helps more people find the project. Every issue helps shape the next 
 
 ## Changelog
 
+### v0.7.1 (2026-05-26) — hotfix: global prompt actually flows now
+
+- **Fix for #45 Persistent Global Instructions** — v0.7.0 saved your global prompt to MMKV but never injected it into any LLM call. The injection helper was wired into `AgentConfig.Builder.build()` but the runtime construction path is `ResolvedModelConfig.toAgentConfig()` which uses the data class constructor directly. Verified via in-app logs: zero `PromptUtils` entries on v0.7.0 even with the prompt set. v0.7.1 also injects in `toAgentConfig` so the global prompt now reaches every cloud + local LLM call.
+
 ### v0.7.0 (2026-05-26) — feature batch
 
 - **Voice input in chat (#44).** New mic button between the text field and the send button launches Android's built-in speech recognition; the transcript appends to whatever you already typed, so you can dictate the second half of a prompt. Works on any device with Google Speech Services; falls back gracefully with a toast on devices without it. No RECORD_AUDIO permission is requested by PokeClaw — the system dialog handles its own permission.
