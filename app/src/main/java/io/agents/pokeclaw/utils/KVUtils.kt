@@ -368,4 +368,14 @@ object KVUtils {
     /** Returns true if LLM is configured (API key, base URL, or local model path is non-empty) */
     fun hasLlmConfig(): Boolean =
         getLlmApiKey().isNotEmpty() || getLlmBaseUrl().isNotEmpty() || getLocalModelPath().isNotEmpty()
+
+    // ==================== Global Prompt (#45) ====================
+    // User-defined persistent instructions prepended to every system prompt.
+    // Empty string = disabled. No separate enable toggle by design (less to misconfigure).
+
+    private const val KEY_GLOBAL_PROMPT = "KEY_GLOBAL_PROMPT"
+
+    fun getGlobalPrompt(): String = getString(KEY_GLOBAL_PROMPT, "")
+    fun setGlobalPrompt(value: String) = putString(KEY_GLOBAL_PROMPT, value)
+    fun hasGlobalPrompt(): Boolean = getGlobalPrompt().isNotBlank()
 }

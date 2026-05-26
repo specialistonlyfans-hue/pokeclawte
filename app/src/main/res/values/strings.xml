@@ -211,4 +211,11 @@
     <string name="voice_input_prompt">Speak now…</string>
     <string name="voice_input_unavailable">Speech recognition not available on this device</string>
     <string name="voice_input_error">Voice input failed. Try again.</string>
+
+    <!-- Global Prompt (#45) -->
+    <string name="global_prompt_title">Global instructions</string>
+    <string name="global_prompt_dialog_title">Edit global instructions</string>
+    <string name="global_prompt_hint">Instructions to apply to every conversation. Leave empty to disable.</string>
+    <string name="global_prompt_not_set">Not set</string>
+    <string name="global_prompt_set_status">Set (%d chars)</string>
 </resources>

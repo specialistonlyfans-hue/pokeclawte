@@ -23,6 +23,7 @@ import io.agents.pokeclaw.base.BaseActivity
 import io.agents.pokeclaw.widget.AlertDialog
 import io.agents.pokeclaw.widget.ConfirmDialog
 import io.agents.pokeclaw.widget.CommonToolbar
+import io.agents.pokeclaw.widget.InputDialog
 import io.agents.pokeclaw.widget.MenuGroup
 import io.agents.pokeclaw.widget.MenuItem
 import io.agents.pokeclaw.AppCapabilityCoordinator
@@ -59,6 +60,7 @@ class SettingsActivity : BaseActivity() {
     private var permBattery: io.agents.pokeclaw.widget.MenuItem? = null
     private var permStorage: io.agents.pokeclaw.widget.MenuItem? = null
     private var externalAutomationItem: io.agents.pokeclaw.widget.MenuItem? = null
+    private var globalPromptItem: io.agents.pokeclaw.widget.MenuItem? = null
 
     private val viewModel by lazy {
         ViewModelProvider(this)[SettingsViewModel::class.java]
@@ -130,6 +132,17 @@ class SettingsActivity : BaseActivity() {
         externalAutomationItem?.setTrailingText(
             if (KVUtils.isExternalAutomationEnabled()) "Enabled" else "Disabled"
         )
+    }
+
+    /** Refreshes the trailing label on the global-prompt row (#45). */
+    private fun refreshGlobalPromptStatus() {
+        val current = KVUtils.getGlobalPrompt()
+        val label = if (current.isBlank()) {
+            getString(R.string.global_prompt_not_set)
+        } else {
+            getString(R.string.global_prompt_set_status, current.length)
+        }
+        globalPromptItem?.setTrailingText(label)
     }
 
     private fun initToolbar() {
@@ -320,10 +333,34 @@ class SettingsActivity : BaseActivity() {
             leadingIcon = android.R.drawable.ic_menu_recent_history,
             title = "Task Budget",
             onClick = { showBudgetDialog() },
-            showDivider = false
+            showDivider = true
         ).apply {
             setTrailingText(io.agents.pokeclaw.agent.TaskBudget.describeCurrentBudget())
         }
+
+        // Global Prompt (#45) — user-defined persistent instructions
+        globalPromptItem = modelGroup.addMenuItem(
+            leadingIcon = android.R.drawable.ic_menu_edit,
+            title = getString(R.string.global_prompt_title),
+            onClick = {
+                val current = KVUtils.getGlobalPrompt()
+                XLog.i("SettingsActivity", "open global prompt dialog: current.len=${current.length}")
+                InputDialog.show(
+                    context = this@SettingsActivity,
+                    title = getString(R.string.global_prompt_dialog_title),
+                    presetText = current,
+                    hint = getString(R.string.global_prompt_hint),
+                    maxLength = 2000,
+                ) { text ->
+                    KVUtils.setGlobalPrompt(text)
+                    XLog.i("SettingsActivity", "global prompt saved: new.len=${text.length}, hasPrompt=${KVUtils.hasGlobalPrompt()}")
+                    refreshGlobalPromptStatus()
+                }
+            },
+            showDivider = false
+        )
+        globalPromptItem?.setLeadingIconColor(getColor(R.color.colorTextPrimary))
+        refreshGlobalPromptStatus()
 
         // Appearance
         val appearanceGroup = findViewById<MenuGroup>(R.id.appearanceGroup)

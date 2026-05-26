@@ -211,4 +211,11 @@
     <string name="voice_input_prompt">请说话…</string>
     <string name="voice_input_unavailable">此设备不支持语音识别</string>
     <string name="voice_input_error">语音输入失败，请重试</string>
+
+    <!-- 全局指令 (#45) -->
+    <string name="global_prompt_title">全局指令</string>
+    <string name="global_prompt_dialog_title">编辑全局指令</string>
+    <string name="global_prompt_hint">应用到每次对话的指令，留空则禁用。</string>
+    <string name="global_prompt_not_set">未设置</string>
+    <string name="global_prompt_set_status">已设置 (%d 字符)</string>
 </resources>

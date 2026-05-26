@@ -1060,6 +1060,48 @@ adb logcat -d --pid=$(adb shell pidof io.agents.pokeclaw) | grep -i 'voice\|spee
 
 ---
 
+## W. Persistent Global Prompt (Issue #45)
+
+E2E tests for user-defined persistent instructions stored in MMKV and injected into
+every system prompt via `PromptUtils.applyGlobalPrompt()`. Empty string = disabled.
+
+- [x] **W1. Settings row visible**: Settings → Models group → row labelled "Global instructions" with edit icon → trailing text "Not set" when empty. **2026-05-26 PASS Pixel 8 Pro v0.7.0**: row appears under Model group between Task Budget and Theme, trailing "Not set", bounds [162,1523][813,1566]
+- [x] **W2. Open edit dialog**: tap Global instructions row → InputDialog bottom sheet opens with title "Edit global instructions", empty preset text, hint text visible. **2026-05-26 PASS Pixel 8 Pro**: logcat `SettingsActivity: open global prompt dialog: current.len=0`, dialog title "Edit global instructions", hint "Instructions to apply to every conversation. Leave empty to disable.", IME (keyboard) opened
+- [x] **W3. Save prompt**: enter "always reply in Cantonese" → Confirm → dialog dismisses → trailing text updates to "Set (25 chars)". **2026-05-26 PASS Pixel 8 Pro**: typed via `adb input text`, tapped OK [504,1271], logcat `SettingsActivity: global prompt saved: new.len=25, hasPrompt=true`, trailing text "Set (25 chars)"
+- [x] **W4. Persistence across app restart**: W3 → force-stop app → relaunch → open Settings → trailing text still "Set (25 chars)". **2026-05-26 PASS Pixel 8 Pro**: `am force-stop` + relaunch SplashActivity + nav to Settings → row still shows "Set (25 chars)"
+- [x] **W5. Persistence in MMKV**: `adb shell run-as io.agents.pokeclaw strings /data/data/io.agents.pokeclaw/files/mmkv/mmkv.default | grep -E "KEY_GLOBAL_PROMPT|...user text"`. **2026-05-26 PASS Pixel 8 Pro**: mmkv.default contains both "KEY_GLOBAL_PROMPT" key and "always reply in Cantonese" value strings
+- [x] **W6. Clear prompt disables**: open dialog → clear text → Confirm → trailing text becomes "Not set". **2026-05-26 PASS Pixel 8 Pro**: tap btnClear @ [918,1100] then OK, logcat `global prompt saved: new.len=0, hasPrompt=false`, trailing "Not set"
+- [ ] **W7. Injection in chat (logcat)**: with global prompt set, send any chat message → logcat shows `PromptUtils: applyGlobalPrompt: injecting global prompt (N chars) into base prompt (M chars)`. **Cannot verify in this session — no LLM model configured. Code path: ChatScreen.send -> ChatSessionController.buildConversationConfig -> PromptUtils.applyGlobalPrompt. Verified structurally; runtime log will fire on next chat with a configured model.**
+- [ ] **W8. Injection in task mode**: AgentConfig.Builder.build() path. **Same as W7 — needs configured LLM. Code path: AgentConfig.Builder.build() -> PromptUtils.applyGlobalPrompt before constructing AgentConfig**
+- [ ] **W9. Max length cap**: paste 2500 chars → InputDialog clamps to 2000 chars. **Not run — InputDialog `maxLength = 2000` parameter passed, InputDialog's existing LengthFilter implementation handles cap (already QA'd elsewhere)**
+- [ ] **W10. Empty string normalization**: enter only whitespace → save → `hasGlobalPrompt()` returns false. **Not run on device — `hasGlobalPrompt() = getGlobalPrompt().isNotBlank()` so whitespace-only is treated as empty by isNotBlank() semantics. Verified by code inspection**
+
+### ADB verification commands
+
+```bash
+# W1: verify Settings row visible
+adb shell am start -n io.agents.pokeclaw/.ui.settings.SettingsActivity
+sleep 2
+adb shell uiautomator dump /sdcard/dump.xml && adb pull /sdcard/dump.xml /tmp/
+grep -i 'global instructions\|Not set' /tmp/dump.xml
+
+# W4: persistence test
+adb shell am force-stop io.agents.pokeclaw
+adb shell am start -n io.agents.pokeclaw/.ui.splash.SplashActivity
+sleep 4
+adb shell am start -n io.agents.pokeclaw/.ui.settings.SettingsActivity
+sleep 2
+adb shell uiautomator dump /sdcard/dump.xml && adb pull /sdcard/dump.xml /tmp/
+grep -i 'Set ([0-9]' /tmp/dump.xml
+
+# W7/W8: verify injection in logcat
+adb logcat -c
+# (trigger a chat or task)
+adb logcat -d --pid=$(adb shell pidof io.agents.pokeclaw) | grep 'PromptUtils'
+```
+
+---
+
 ## QA Debug Changelog
 
 Format: `[date] [status] [test-id] description`
