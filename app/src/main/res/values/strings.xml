@@ -205,4 +205,10 @@
     <string name="input_dialog_need_more">Enter at least %d characters</string>
     <string name="input_dialog_need_less">Enter at most %d characters</string>
     <string name="input_dialog_no_zero">Please enter a non-zero value</string>
+
+    <!-- Voice Input (#44) -->
+    <string name="voice_input_button_cd">Voice input</string>
+    <string name="voice_input_prompt">Speak now…</string>
+    <string name="voice_input_unavailable">Speech recognition not available on this device</string>
+    <string name="voice_input_error">Voice input failed. Try again.</string>
 </resources>

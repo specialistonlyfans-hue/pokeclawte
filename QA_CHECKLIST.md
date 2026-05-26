@@ -1026,6 +1026,40 @@ Layer 1 broadcast bypasses UI routing. Only Layer 3 catches routing bugs.
 
 ---
 
+## V. Voice Input (Issue #44)
+
+E2E tests for system speech recognition (`RecognizerIntent`) wired into the chat composer.
+All tests on a real device with Google Speech Services installed (Pixel + most modern Android).
+
+- [x] **V1. Mic button visible**: open chat → input bar shows mic icon between text field and send FAB → expected: visible, tappable. **2026-05-26 PASS Pixel 8 Pro**: mic FAB @ [803,2057][894,2165], content-desc="Voice input", between TextField (right edge 803) and Send (left edge 894)
+- [x] **V2. Tap mic with empty field**: tap mic → Android system speech recognition dialog opens ("Speak now") → expected: dialog visible within 2s. **2026-05-26 PASS Pixel 8 Pro**: logcat shows `VoiceInput: mic tapped: text.len=0`, GoogleTTSActivity becomes top activity, NetworkSpeechRecognizer + SodaSpeechRecognizer start listening, custom prompt "Speak now…" from strings.xml renders
+- [ ] **V3. Speech transcription happy path**: tap mic → say "hello world" clearly → dialog closes → expected: text field contains "hello world". **Needs human voice verify; code path verified via V5 structural cancel test**
+- [ ] **V4. Speech with prefix text**: type "remind me to " → tap mic → say "buy milk" → expected: text field contains "remind me to buy milk" (appended with space). **Needs human voice verify; prefix logic: `if text.isBlank() -> "" else if text.endsWith(" ") -> text else "$text "` + spokenText**
+- [x] **V5. Cancel speech dialog**: tap mic → swipe down / back button → expected: text field unchanged, no crash, no toast. **2026-05-26 PASS Pixel 8 Pro**: BACK keyevent → `voiceLauncher result: resultCode=0` → `voice input cancelled by user` log, returned to ComposeChatActivity, EditText placeholder "Chat or give a task..." still visible (= text empty), no toast, no FATAL
+- [ ] **V6. No speech service**: (uninstall Google app or device without speech recognition) tap mic → expected: toast "Speech recognition not available on this device", no crash. **Cannot verify on Pixel — Google Speech preinstalled. Code catches `ActivityNotFoundException` → R.string.voice_input_unavailable toast**
+- [ ] **V7. Send after voice input**: V3 succeeds → tap send → expected: message sends normally as if typed. **Needs V3 to pass first**
+- [ ] **V8. Voice input during isTaskRunning**: task running → tap mic → expected: dialog still opens (mic available); recognized text appended to field (does not interrupt running task). **Needs human voice; code uses `micEnabled = inputEnabled` only (not gated on isTaskRunning)**
+- [ ] **V9. Voice input in Task mode**: Local LLM → Task mode → tap mic → say "open WhatsApp" → expected: text appears, can submit as task. **Needs human voice + local model**
+- [x] **V10. Mic permission**: RecognizerIntent handles its own permission — no RECORD_AUDIO request from PokeClaw expected. **2026-05-26 PASS Pixel 8 Pro**: V2 dialog opened immediately without permission prompt — system mic permission delegated to Google Speech service, as designed**
+
+### ADB / uiautomator verification commands
+
+```bash
+# V1: verify mic visible in input bar
+adb shell uiautomator dump /sdcard/window_dump.xml && adb pull /sdcard/window_dump.xml /tmp/
+grep -i 'voice\|mic' /tmp/window_dump.xml
+
+# V2: launch speech recognition by tapping mic (coordinates TBD post-build)
+# After tap, verify Google Speech dialog visible:
+adb shell uiautomator dump /sdcard/window_dump.xml && adb pull /sdcard/window_dump.xml /tmp/
+grep -i 'speak now\|listening' /tmp/window_dump.xml
+
+# V6: check logcat for graceful no-service error
+adb logcat -d --pid=$(adb shell pidof io.agents.pokeclaw) | grep -i 'voice\|speech\|recognizer'
+```
+
+---
+
 ## QA Debug Changelog
 
 Format: `[date] [status] [test-id] description`
