@@ -53,7 +53,7 @@ Priority: `P0` = blocks users, fix now. `P1` = next up. `P2` = when we get to it
 - [ ] **P1** v0.7.x follow-up — re-run V3/V4/V7-V9 with actual human voice to verify transcript appends to text field correctly on signed release
 - [ ] **P2** Emulator Matrix CI workflow debug — all 5 API levels failed on first run after v0.7.0 tag; investigate SplashActivity launch coords / AVD startup config on GitHub runners
 - [x] ~~**P1** M1-M12 QA: Cloud LLM complex tasks~~ — done 2026-04-08, 10/12 PASS
-- [ ] **P2** K6: Verify each Settings permission row leads to correct system settings page
+- [x] ~~**P2** K6: Verify each Settings permission row leads to correct system settings page~~ — done 2026-05-26 on Pixel 8 Pro v0.7.0 signed: all 6 rows route to the correct system Activity (Accessibility, Task Notifications via permissioncontroller, Notification Access, System Window via SpaActivity, Battery Whitelist via RequestIgnoreBatteryOptimizations, File Access via SpaActivity). Recorded in QA Debug Changelog 2026-05-26.
 - [ ] **P2** Settings layout QA: verify long local/cloud model names render cleanly on the Settings screen across Pixel/Samsung widths
 - [ ] **P2** Download free space check — done 2026-04-08 (StatFs before download)
 - [ ] **P1** Local vague-task UX: in Local Task mode, prompt-only behavior is correct, but vague requests like `Copy that token to the clipboard` currently hang instead of failing fast with a clear request for the missing content/details
