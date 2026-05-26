@@ -47,7 +47,11 @@ Priority: `P0` = blocks users, fix now. `P1` = next up. `P2` = when we get to it
 - [ ] **P1** Production intent callback E2E: when an external automation request includes `request_id` and `return_action`, PokeClaw broadcasts a completion/failure result that Tasker/MacroDroid can consume
 - [ ] **P1** Telegram bot channel E2E: token configured -> polling connected -> user sends `/start` and a task to the bot -> PokeClaw receives the update -> returns a visible bot reply. Current QA is blocked by the handset Telegram account being frozen/read-only.
 - [ ] **P1** C2: Auto-reply trigger E2E — needs 2nd device to send WhatsApp message to Girlfriend
-- [ ] **P1** Release QA: verify locally signed `0.5.1+` public APK can upgrade in-place over the next signed public build once the stable key is installed in GitHub Actions
+- [x] ~~**P1** Release QA: verify locally signed `0.5.1+` public APK can upgrade in-place over the next signed public build once the stable key is installed in GitHub Actions~~ — done 2026-05-26: v0.6.12 signed → v0.7.0 signed in-place upgrade PASS on Pixel 8 Pro (same keystore, no uninstall needed)
+- [ ] **P0** PROCESS GATE — full QA on signed-release APK BEFORE pushing the version tag. v0.7.0 was tagged first and QA'd second; CLAUDE.md says full QA triggers on "before any release/version bump". Next release: pull the locally-built signed `assembleRelease` APK or the CI artifact from a draft release, run V/W/X/Y + J + K + P sections, only then push the tag.
+- [ ] **P1** v0.7.x follow-up — re-run W7/W8 with a configured cloud LLM to verify PromptUtils.applyGlobalPrompt logcat trace fires (or AppLogStore captures it in debug-report.zip)
+- [ ] **P1** v0.7.x follow-up — re-run V3/V4/V7-V9 with actual human voice to verify transcript appends to text field correctly on signed release
+- [ ] **P2** Emulator Matrix CI workflow debug — all 5 API levels failed on first run after v0.7.0 tag; investigate SplashActivity launch coords / AVD startup config on GitHub runners
 - [x] ~~**P1** M1-M12 QA: Cloud LLM complex tasks~~ — done 2026-04-08, 10/12 PASS
 - [ ] **P2** K6: Verify each Settings permission row leads to correct system settings page
 - [ ] **P2** Settings layout QA: verify long local/cloud model names render cleanly on the Settings screen across Pixel/Samsung widths
