@@ -62,10 +62,39 @@ runs and ~10 physical runs per day.
 
 **Cost:** Free tier covers most needs. Beyond that: $1/hr/device.
 
-**Status (2026-05-26):** NOT YET integrated into PokeClaw CI. P1
-backlog item: wire `gcloud firebase test android run` into the
-emulator-matrix workflow's matrix-summary job for the build pushed to
-main, target the 2-3 most-requested devices in open OEM issues.
+**Status (2026-05-26):** WORKFLOW WRITTEN at `.github/workflows/firebase-test-lab.yml`. NOT YET RUNNING — needs the following GitHub Actions secrets installed:
+
+  GCP_PROJECT_ID            - your Firebase / GCP project id
+  GCP_SA_KEY_JSON           - service account JSON key for that project
+
+### One-time setup steps (5-15 min)
+
+1. Go to https://console.firebase.google.com → Add project (or reuse an existing one).
+2. Enable the Firebase Test Lab API: Console → "Test Lab" left nav → Get Started.
+3. Create a service account:
+   - https://console.cloud.google.com → IAM & Admin → Service Accounts → Create
+   - Name: `pokeclaw-ci`
+   - Roles: `Firebase Test Lab Admin`, `Cloud Testing Test Admin`
+   - Create JSON key → download
+4. Create the results bucket:
+   - https://console.cloud.google.com/storage → Create bucket
+   - Name: `<PROJECT_ID>-ftl-results`
+   - Region: us-central1 (matches FTL default), Standard, no lifecycle
+5. Add the two GitHub secrets:
+   ```bash
+   gh secret set GCP_PROJECT_ID -R agents-io/PokeClaw -b "<your-project-id>"
+   gh secret set GCP_SA_KEY_JSON -R agents-io/PokeClaw < ~/Downloads/pokeclaw-ci-key.json
+   ```
+6. Manually trigger the workflow to verify it works:
+   ```bash
+   gh workflow run "Firebase Test Lab — real device smoke" -R agents-io/PokeClaw
+   ```
+
+### Free tier reality check
+
+Firebase Test Lab gives 5 virtual + 10 physical device runs per day for free. The workflow uses 2 physical devices per run (Pixel 7 + Samsung S22) so a single CI invocation costs 2 of the daily 10. Plenty of headroom for release-tag-triggered smoke (~once per release).
+
+If you want PR-time smoke instead of release-tag-only, change the workflow trigger to `pull_request` and watch the daily quota — 5 PRs/day max before hitting the free-tier cap. Then either pay (~$1/device-hr) or fall back to emulator matrix for PR + FTL for release.
 
 ---
 
