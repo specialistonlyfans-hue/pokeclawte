@@ -117,7 +117,30 @@ adb over network without extra setup.
 
 **Cost:** $0
 
-**Status (2026-05-26):** NOT YET signed up. P1 backlog.
+**Status (2026-05-28):** ✅ Signed up.
+
+- Account: `ithiria137@gmail.com` (Google OAuth → Samsung account)
+- Account type: Personal / Developer / Application S/W engineer / Staff
+- Device list URL: https://developer.samsung.com/remotetestlab/devices
+- Reservations URL: https://developer.samsung.com/remotetestlab/reservations
+- Dashboard: https://developer.samsung.com/dashboard
+- Catalog as of 2026-05-28: **1,165 devices**, multi-region (Brazil, Korea, Poland, Russia, UK, USA-TX)
+- Top-tier hardware available: Galaxy S26 Ultra / Z Flip7 / Tab S11 / Watch8 Classic, Android 16 + One UI 8.5
+- Categories: Galaxy A / S / Z / F·M·Note / Tab / Watch / 16KB Page Size / TV
+
+**How to use (manual, no automation):**
+
+1. Sign in at https://developer.samsung.com/remote-test-lab
+   → click `Sign in with Google` → choose `ithiria137@gmail.com`
+2. Pick a device from `Device List` (e.g. Galaxy A52 5G for #16/#17 repro)
+3. Click `Reserve` (30-min sessions, then re-queue)
+4. Web client opens — controllable via browser only (no SSH/adb over network out-of-the-box)
+5. Sideload PokeClaw APK via the web client's `Install APK` button (drag the latest signed release APK from `~/MyGithub/PokeClaw/app/build/outputs/apk/release/`)
+6. Drive UI in browser; capture findings in `QA_CHECKLIST.md` under K-section
+
+**Limitation vs Firebase Test Lab:** browser-only, manual, no scripted automation. Use it for human-driven repro of OEM-specific issues, not for CI.
+
+**Account-recovery note:** The Samsung account ithiria137 was created fresh on 2026-05-28 to bypass a 2FA lockout on an older `ithiria894` Samsung account (registered phone number is no longer Nicole's). If 137 ever gets locked out the same way, create another fresh Samsung account on a different Google identity rather than fighting Samsung's phone-recovery flow.
 
 ---
 
