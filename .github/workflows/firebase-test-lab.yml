@@ -126,7 +126,7 @@ jobs:
           gcloud firebase test android run \
             --type robo \
             --app "$APK" \
-            --device model=Pixel7,version=33,locale=en,orientation=portrait \
+            --device model=panther,version=33,locale=en,orientation=portrait \
             --device model=b0q,version=33,locale=en,orientation=portrait \
             --timeout 5m \
             --num-flaky-test-attempts=0 \
