@@ -142,6 +142,10 @@ adb over network without extra setup.
 
 **Account-recovery note:** The Samsung account ithiria137 was created fresh on 2026-05-28 to bypass a 2FA lockout on an older `ithiria894` Samsung account (registered phone number is no longer Nicole's). If 137 ever gets locked out the same way, create another fresh Samsung account on a different Google identity rather than fighting Samsung's phone-recovery flow.
 
+**RTL 2FA setup gotcha:** Samsung Developer Portal enrollment does NOT enable RTL device reservation by itself. The first time you click a device from the catalog, Samsung redirects to a re-OAuth (different `client_id=njoy59b58h`), re-shows US-region terms, then forces a "Add your phone number" 2FA setup screen. The SMS code timer is ~3 min. If you let the code expire and click Send Code again, Samsung rate-limits the account ("Too many verification attempts… try again in a few hours") and the entire RTL flow is unreachable for hours. **Mitigation:** when the SMS arrives, type the code into the verification box and submit IMMEDIATELY — do not pile up exploratory clicks while the timer counts down. If you trip the rate limit, wait several hours before trying again.
+
+**Phone number used:** +1-604-338-8267 (Canada) bound 2026-05-28. Every sign-in to RTL service may prompt for SMS code on this number.
+
 ---
 
 ## 🟡 Tier 4 — Physical second-hand devices (Xiaomi / OPPO / realme)
