@@ -55,9 +55,9 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = readLocalOrEnvInt("POKECLAW_VERSION_CODE", 29)
-        versionName = readLocalOrEnvString("POKECLAW_VERSION_NAME", "0.7.1")
+        versionName = readLocalOrEnvString("POKECLAW_VERSION_NAME", "0.7.1-fork.1")
         buildConfigField("String", "VERSION_INFO", getVersionGit())
-        buildConfigField("String", "APP_ORIGIN", "\"PokeClaw by agents.io | github.com/agents-io/PokeClaw\"")
+        buildConfigField("String", "APP_ORIGIN", "\"PhoneAgent Lab fork | based on agents-io/PokeClaw\"")
         buildConfigField("String", "BUILD_FINGERPRINT", "\"${getBuildFingerprint()}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -193,7 +193,7 @@ androidComponents {
         variant.outputs.forEach { output ->
             if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
                 val versionName = android.defaultConfig.versionName ?: "0.0.0"
-                val fileName = "PokeClaw_v${versionName}_${getDateTime()}.apk"
+                val fileName = "PhoneAgentLab_v${versionName}_${getDateTime()}.apk"
                 println("output file name: $fileName")
                 output.outputFileName.set(fileName)
             }
@@ -238,24 +238,7 @@ fun getParameter(key: String, defaultValue: String): String {
         val property = project.properties[key] as String?
         if (!property.isNullOrEmpty()) {
             value = property
-            println("get property[$key]from project:$value")
-            return value
         }
     }
-    val localPropertiesFile = project.rootProject.file("local.properties")
-    val localProperties = Properties()
-    if (localPropertiesFile.exists()) {
-        localProperties.load(localPropertiesFile.inputStream())
-        val hasLocalProperty = localProperties.hasProperty(key)
-        if (hasLocalProperty) {
-            val property = localProperties[key] as String?
-            if (!property.isNullOrEmpty()) {
-                value = property
-                println("get property[$key]from local:$value")
-                return value
-            }
-        }
-    }
-    println("get property[$key] from default:$value")
     return value
 }
