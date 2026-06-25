@@ -1,38 +1,38 @@
-# PokeClaw Skill File Specification v1.0
+# PokeClaw Skill File Specification v1.1
 
 ## Overview
 
 Skills are predefined playbooks that tell the on-device LLM exactly what steps to follow. Instead of the model guessing which tools to use, a skill provides a recipe. The model follows it.
 
-Skills are written in natural language (Markdown). What you write is what the model sees.
+Skills are written in natural language Markdown. What you write is what the model sees.
 
 ## File Format
 
-**Naming:** `{skill-name}.skill.md`
-**Location:** `assets/skills/` (built-in), `/sdcard/PokeClaw/skills/` (user-created)
+**Naming:** `{skill-name}.skill.md`  
+**Location:** `app/src/main/assets/skills/` for built-in Android assets, `/sdcard/PokeClaw/skills/` for user-created skills  
 **Encoding:** UTF-8
 
 ## Frontmatter
 
 Delimited by `---` lines. Flat key-value pairs only.
 
-```
+```yaml
 ---
 description: <required> One sentence. Include a trigger example. Shown to the router LLM for skill selection.
-tools: <required> Comma-separated list of PokeClaw tool identifiers this skill uses.
+tools: <required> Comma-separated list of PokeClaw runtime tool identifiers.
 author: <optional> Name or handle.
 version: <optional> Semver.
 ---
 ```
 
 - `description` is what the router LLM sees. Write it to maximize matching accuracy. Include an example trigger phrase after a comma.
-- `tools` must use exact PokeClaw tool identifiers. Unknown tools produce a load-time warning; the skill still loads with valid tools. Zero valid tools = skill skipped.
+- `tools` must use exact runtime tool identifiers from `ToolRegistry`. Unknown tools produce a load-time warning; the skill should be skipped if zero valid tools remain.
 
 ## Body
 
 Everything after the closing `---` is injected verbatim into the LLM prompt when this skill is selected.
 
-### Structure
+### Recommended Structure
 
 ```markdown
 # Skill Name
@@ -48,14 +48,14 @@ One sentence summary.
 3. [Action step with inline error handling if critical]
 4. [Action step]
 ...
-N. Confirm completion to the user.
+N. Call finish with a clear user-visible summary.
 
 ## Example
 
 User: "natural language request"
 → tool_call(args)
 → tool_call(args)
-→ "Confirmation message"
+→ finish("Confirmation message")
 
 ## If something goes wrong
 
@@ -68,64 +68,62 @@ User: "natural language request"
 - Target 250-350 tokens. Warn at 400.
 - Steps are numbered and imperative.
 - Step 1 is always parameter extraction. Include defaults.
-- Step 2 is always "ask if unclear."
-- Use natural language references ("the contact," "the specified app"), not template syntax like `{contact}`.
-- Put critical error handling inline with the step. The error section is supplementary.
+- Step 2 is always clarification or safe default behavior.
+- Use natural language references, not template syntax like `{contact}`.
+- Put critical error handling inline with the step.
 - One example recommended. Two max.
+- Use exact runtime tool names, not friendly display names.
 
 ## Routing
 
 On each user message:
 
 1. Runtime builds a routing prompt listing all loaded skills by `description`.
-2. LLM outputs a skill name or "none."
-3. Runtime normalizes output (lowercase, strip whitespace, hyphens = underscores) and matches against loaded skill filenames.
-4. No match → "none" → general conversation mode.
-
-The router handles any language. Gemma 4 is multilingual — a Chinese request matches an English skill description semantically.
-
-### Router Prompt Template
-
-```
-Pick the best skill or "none":
-
-1. send-message: Send a message to a contact, e.g. "text Mom hello on WhatsApp"
-2. monitor-reply: Auto-reply to incoming messages, e.g. "reply to boss for me"
-3. open-app: Open an app, e.g. "open Chrome"
-
-User: "{user_input}"
-Skill:
-```
-
-~250-300 tokens for 10 skills. Model outputs one word.
+2. LLM outputs a skill name or `none`.
+3. Runtime normalizes output and matches against loaded skill filenames.
+4. No match → `none` → general conversation mode.
 
 ## Execution
 
 1. Runtime reads the matched skill's `tools` field.
-2. Runtime builds execution prompt: skill body (verbatim) + tool definitions for listed tools only.
+2. Runtime builds execution prompt: skill body plus tool definitions for listed tools only.
 3. Model follows steps using scoped tools.
-4. Rigid step execution for MVP.
+4. Skill should call `finish` with the user-visible result when complete.
 
-## Valid Tool Identifiers
+## Valid Runtime Tool Identifiers
+
+These names must match `BaseTool.getName()` values in the Android runtime.
 
 | Tool | Description |
 |------|-------------|
-| `open_app` | Launch an app by name |
-| `tap` | Tap a screen coordinate or element |
-| `type_text` | Enter text into the focused field |
-| `find_element` | Find a UI element by description |
-| `scroll` | Scroll in a direction |
+| `open_app` | Launch an app by package/name path available to the runtime |
+| `tap` | Tap screen coordinates |
+| `tap_node` | Tap a node ID returned by `get_screen_info` |
+| `input_text` | Enter text into the focused field or a specific `node_id` |
+| `find_node_info` | Find node info by description/text when available |
+| `scroll_to_find` | Search for text by scrolling a view |
 | `swipe` | Swipe gesture |
 | `send_message` | Full messaging flow |
-| `auto_reply` | Enable auto-reply monitoring |
-| `send_reply` | Reply to a notification |
-| `read_notification` | Read incoming notifications |
-| `set_monitor` | Start monitoring for notifications |
-| `list_skills` | Return list of installed skills |
-| `press_back` | Press the back button |
-| `screenshot` | Capture current screen |
-| `get_screen_info` | Read current UI tree |
-| `finish` | Signal task completion |
+| `auto_reply` | Enable/disable auto-reply monitoring |
+| `get_notifications` | Read recent notifications |
+| `get_installed_apps` | List installed apps |
+| `get_device_info` | Read device/battery/storage/network information |
+| `clipboard` | Read or set clipboard content |
+| `system_key` | Press Android system keys such as back/home |
+| `wait` | Wait for a specified duration |
+| `take_screenshot` | Capture current screen and return a local PNG path |
+| `get_screen_info` | Read the current Accessibility UI tree |
+| `finish` | Signal task completion and return the final user-visible summary |
+
+## Tree-First Control Pattern
+
+For smooth phone control, prefer the Accessibility tree over screenshot loops:
+
+1. Call `get_screen_info`.
+2. Use returned text, bounds, node IDs, and editable state.
+3. Prefer `input_text(node_id="n5", text="...")` for fields.
+4. Prefer `tap_node` or node-derived coordinates over raw guessing.
+5. Use `take_screenshot` only for image-only context or when the UI tree is incomplete.
 
 ## Example Skills
 
@@ -134,12 +132,12 @@ Skill:
 ```markdown
 ---
 description: Send a message to a contact on a messaging app, e.g. "text Mom hello on WhatsApp"
-tools: open_app, tap, type_text, find_element, scroll
+tools: send_message, finish
 ---
 
 # Send Message
 
-Send a text message to a specific contact using a messaging app.
+Send a single text message to a specific contact using a messaging app.
 
 ## Steps
 
@@ -148,61 +146,14 @@ Send a text message to a specific contact using a messaging app.
    - **app**: which app to use (default: WhatsApp)
    - **message**: what to send
 2. If any of these are unclear, ask the user before proceeding.
-3. Use open_app to launch the messaging app.
-4. Find the contact in the chat list. If not found, tell the user.
-5. Tap the contact to open the chat.
-6. Tap the message input field.
-7. Type the message content.
-8. Tap the send button. If not found, tell the user.
-9. Confirm: "Message sent to [contact] on [app]."
+3. Use send_message with the contact, app, and message.
+4. Call finish to confirm the message was sent.
 
 ## Example
 
 User: "Tell Mom I'll be late on WhatsApp"
-→ open_app("WhatsApp")
-→ find Mom → tap
-→ tap message field → type "I'll be late"
-→ tap send
-→ "Message sent to Mom on WhatsApp."
-
-## If something goes wrong
-
-- If the app is not installed: tell the user.
-- If the contact is not found: ask the user to check the name.
-- If the send button can't be found: tell the user the app layout might have changed.
-```
-
-### monitor-reply.skill.md
-
-```markdown
----
-description: Watch for incoming messages and auto-reply, e.g. "auto-reply to my boss saying I'm in a meeting"
-tools: auto_reply, finish
----
-
-# Monitor and Auto-Reply
-
-Watch for incoming messages from a contact and automatically reply using the on-device LLM.
-
-## Steps
-
-1. From the user's request, identify:
-   - **contact**: who to watch for
-   - **app**: which messaging app (default: WhatsApp)
-2. If the contact is unclear, ask the user.
-3. Use auto_reply to enable monitoring for the contact on the specified app.
-4. Use finish to confirm: "Auto-reply is active for [contact] on [app]."
-
-## Example
-
-User: "Monitor Mom on WhatsApp and auto-reply for me"
-→ auto_reply(contact="Mom", app="WhatsApp")
-→ finish("Auto-reply enabled for Mom on WhatsApp")
-
-## If something goes wrong
-
-- If accessibility is not enabled: tell the user to enable it in Settings.
-- If the contact name is ambiguous: ask which contact they mean.
+→ send_message(contact="Mom", app="WhatsApp", message="I'll be late")
+→ finish("Message sent to Mom on WhatsApp.")
 ```
 
 ### open-app.skill.md
@@ -222,44 +173,27 @@ Open an application on the device.
 1. From the user's request, identify:
    - **app**: which app to open
 2. Use open_app to launch it.
-3. Confirm: "Opened [app]."
-
-## Example
-
-User: "Open YouTube"
-→ open_app("YouTube")
-→ "Opened YouTube."
-
-## If something goes wrong
-
-- If the app is not found: "I couldn't find an app called [name]. Could you check the name?"
+3. Call finish to confirm: "Opened [app]."
 ```
 
-### list-skills.skill.md
+### instagram-reply-draft.skill.md
 
 ```markdown
 ---
-description: Show what skills are available, e.g. "what can you do?" or "help"
-tools: list_skills
+description: Draft a safe Instagram DM or comment reply from visible context, e.g. "reply to this Instagram DM politely"
+tools: open_app, get_screen_info, input_text, finish
 ---
 
-# List Skills
+# Instagram Reply Draft
 
-Tell the user what skills are available.
+Draft an Instagram DM/comment reply without sending automatically.
 
 ## Steps
 
-1. Use list_skills to get the current list of installed skills.
-2. Present each skill with its name and a short description.
-3. Ask if the user wants to try any of them.
-
-## Example
-
-User: "What can you do?"
-→ list_skills()
-→ "Here's what I can help with:
-   - Send Message: text someone on WhatsApp, Telegram, etc.
-   - Monitor Reply: auto-reply to incoming messages
-   - Open App: launch any app
-   Want to try any of these?"
+1. Identify the visible target and desired tone.
+2. Use get_screen_info to read visible text, input fields, buttons, and node IDs. Do not use screenshots for normal replies.
+3. Draft 1-3 short reply options.
+4. If the user explicitly chooses one and asks to prepare it, use input_text with the reply field node_id.
+5. Never tap Send, Like, Follow, Block, Report, Delete, Post, Share, Boost, or Publish.
+6. Call finish with the draft or confirmation that it is inserted for manual review.
 ```

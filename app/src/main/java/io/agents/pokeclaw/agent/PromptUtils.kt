@@ -12,8 +12,8 @@ import io.agents.pokeclaw.utils.XLog
  * Single responsibility: take a system prompt that some component is about to feed
  * to the LLM, and prepend the user's persistent global instructions when present.
  *
- * Empty / blank user global prompt = no-op, base prompt returned unchanged. This is
- * the disable signal — no separate boolean toggle, less state to misconfigure.
+ * Empty / blank user global prompt = no-op. Built-in assistant skill rules are still
+ * injected into the base prompt so feature playbooks work without user configuration.
  */
 object PromptUtils {
     private const val TAG = "PromptUtils"
@@ -22,19 +22,21 @@ object PromptUtils {
     private const val SEPARATOR = "\n\n---\n\n"
 
     /**
-     * Returns the base prompt, prepended with the user's global instructions if any.
-     * Stable separator so downstream debug-report tooling can detect injection.
+     * Returns the base prompt with built-in assistant skill rules applied, and then
+     * prepends the user's global instructions if any. Stable separator lets
+     * debug-report tooling detect user-global injection.
      */
     fun applyGlobalPrompt(basePrompt: String): String {
+        val enrichedBase = SocialAssistantPrompt.apply(basePrompt)
         val global = KVUtils.getGlobalPrompt()
         if (global.isBlank()) {
-            XLog.d(TAG, "applyGlobalPrompt: no global prompt set, returning base (${basePrompt.length} chars)")
-            return basePrompt
+            XLog.d(TAG, "applyGlobalPrompt: no global prompt set, returning enriched base (${enrichedBase.length} chars)")
+            return enrichedBase
         }
         XLog.i(
             TAG,
-            "applyGlobalPrompt: injecting global prompt (${global.length} chars) into base prompt (${basePrompt.length} chars)"
+            "applyGlobalPrompt: injecting global prompt (${global.length} chars) into enriched base prompt (${enrichedBase.length} chars)"
         )
-        return "$PREFIX_HEADER\n$global$SEPARATOR$basePrompt"
+        return "$PREFIX_HEADER\n$global$SEPARATOR$enrichedBase"
     }
 }
