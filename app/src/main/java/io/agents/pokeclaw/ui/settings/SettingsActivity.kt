@@ -23,7 +23,6 @@ import io.agents.pokeclaw.utils.KVUtils
 import io.agents.pokeclaw.utils.XLog
 import io.agents.pokeclaw.widget.AlertDialog
 import io.agents.pokeclaw.widget.CommonToolbar
-import io.agents.pokeclaw.widget.ConfirmDialog
 import io.agents.pokeclaw.widget.InputDialog
 import io.agents.pokeclaw.widget.MenuGroup
 import io.agents.pokeclaw.widget.MenuItem
@@ -422,7 +421,6 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun showBudgetDialog() {
-        val options = arrayOf("Low", "Medium", "High", "Unlimited")
         AlertDialog.show(
             context = this,
             title = "Task Budget",
@@ -504,7 +502,7 @@ class SettingsActivity : BaseActivity() {
         }
     }
 
-    private fun applyThemeToGroups(colors: io.agents.pokeclaw.ui.chat.ThemeManager.ThemeColors) {
+    private fun applyThemeToGroups(colors: io.agents.pokeclaw.ui.chat.ThemeManager.ChatColors) {
         val groups = listOf(
             R.id.permissionsGroup,
             R.id.channelGroup,
@@ -517,7 +515,7 @@ class SettingsActivity : BaseActivity() {
         groups.forEach { id ->
             findViewById<MenuGroup>(id)?.let { group ->
                 for (i in 0 until group.childCount) {
-                    group.getChildAt(i)?.setBackgroundColor(colors.surface)
+                    group.getChildAt(i)?.setBackgroundColor(colors.toolbarBg)
                 }
             }
         }
