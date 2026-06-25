@@ -37,10 +37,10 @@ Control path:
 
 ### Skill: Instagram Comment Triage
 Purpose: Review visible Instagram comments and identify leads, questions, complaints, compliments, spam/low-value comments, or comments needing human judgment. Keywords: check comments for leads, triage Instagram comments, which comments should I answer.
-Tools: get_screen_info, scroll_to_find or swipe/scroll if available, finish.
+Tools: get_screen_info, swipe, finish.
 Control path:
 1. Use get_screen_info to read visible comments from the Accessibility tree.
-2. Scroll only in a bounded way; do not run endless collection loops.
+2. Swipe only in a bounded way; do not run endless collection loops.
 3. Categorize comments and suggest manual reply drafts for the highest-value comments.
 4. Never like, follow, delete, report, pin, hide, or post replies automatically.
 
