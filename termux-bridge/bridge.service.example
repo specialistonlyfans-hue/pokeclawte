@@ -1,0 +1,5 @@
+# Not a real Android service file. Reference only.
+# In Termux use start.sh or Termux:Boot.
+
+command=$HOME/pokeclawte/termux-bridge/start.sh
+health=http://127.0.0.1:8787/health
