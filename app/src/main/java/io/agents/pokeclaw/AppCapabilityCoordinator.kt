@@ -147,11 +147,6 @@ object AppCapabilityCoordinator {
             return ServiceBindingState.READY
         }
 
-        // Process-young grace: after any process restart (manual force-stop, OS task-kill on
-        // aggressive OEMs like Xiaomi/Samsung), the AccessibilityService singleton is null and
-        // onServiceConnected hasn't fired yet for the new process. The OS rebinds within seconds.
-        // Anchor the grace to PROCESS start time so a fresh process always gets a fair window
-        // regardless of how stale lastHealthyAt is in MMKV.
         if (now - processStartTimestamp <= PROCESS_START_REBIND_GRACE_MS) {
             return ServiceBindingState.CONNECTING
         }
@@ -222,19 +217,7 @@ object AppCapabilityCoordinator {
                     openAppDetailsSettings(context)
                 }
             }
-            AppRequirement.STORAGE -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    if (!launch(
-                            context,
-                            Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                                data = "package:${context.packageName}".toUri()
-                            }
-                        )
-                    ) {
-                        openAppDetailsSettings(context)
-                    }
-                }
-            }
+            AppRequirement.STORAGE -> openStorageSettings(context)
             AppRequirement.NOTIFICATION_PERMISSION -> Unit
         }
     }
@@ -249,11 +232,31 @@ object AppCapabilityCoordinator {
         )
 
         for (intent in candidates) {
-            if (launch(context, intent)) {
-                return
-            }
+            if (launch(context, intent)) return
         }
         XLog.w(TAG, "openOverlaySettings: all overlay settings intents failed")
+    }
+
+    private fun openStorageSettings(context: Context) {
+        val packageUri = Uri.parse("package:${context.packageName}")
+        val candidates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            listOf(
+                Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri),
+                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri),
+                Intent(Settings.ACTION_SETTINGS),
+            )
+        } else {
+            listOf(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri),
+                Intent(Settings.ACTION_SETTINGS),
+            )
+        }
+
+        for (intent in candidates) {
+            if (launch(context, intent)) return
+        }
+        XLog.w(TAG, "openStorageSettings: all storage settings intents failed")
     }
 
     private fun openAppDetailsSettings(context: Context) {
@@ -265,10 +268,15 @@ object AppCapabilityCoordinator {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
-            ContextCompat.checkSelfPermission(
+            val readGranted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+            val writeGranted = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
+            readGranted && writeGranted
         }
     }
 
