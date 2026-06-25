@@ -5,9 +5,11 @@ package io.agents.pokeclaw
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
@@ -18,6 +20,7 @@ import io.agents.pokeclaw.service.ClawAccessibilityService
 import io.agents.pokeclaw.service.ClawNotificationListener
 import io.agents.pokeclaw.service.ForegroundService
 import io.agents.pokeclaw.utils.KVUtils
+import io.agents.pokeclaw.utils.XLog
 
 enum class ServiceBindingState {
     DISABLED,
@@ -72,6 +75,7 @@ data class AppCapabilitySnapshot(
 }
 
 object AppCapabilityCoordinator {
+    private const val TAG = "AppCapabilityCoordinator"
     private const val SERVICE_REBIND_GRACE_MS = 15_000L
     private const val PROCESS_START_REBIND_GRACE_MS = 30_000L
     private const val ACCESSIBILITY_INTERRUPT_GRACE_MS = 4_000L
@@ -206,32 +210,55 @@ object AppCapabilityCoordinator {
                 }
                 launch(context, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }
-            AppRequirement.OVERLAY -> {
-                launch(
-                    context,
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
-                )
-            }
+            AppRequirement.OVERLAY -> openOverlaySettings(context)
             AppRequirement.BATTERY_OPTIMIZATION -> {
-                launch(
-                    context,
-                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = "package:${context.packageName}".toUri()
-                    }
-                )
-            }
-            AppRequirement.STORAGE -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    launch(
+                if (!launch(
                         context,
-                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                             data = "package:${context.packageName}".toUri()
                         }
                     )
+                ) {
+                    openAppDetailsSettings(context)
+                }
+            }
+            AppRequirement.STORAGE -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    if (!launch(
+                            context,
+                            Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                data = "package:${context.packageName}".toUri()
+                            }
+                        )
+                    ) {
+                        openAppDetailsSettings(context)
+                    }
                 }
             }
             AppRequirement.NOTIFICATION_PERMISSION -> Unit
         }
+    }
+
+    private fun openOverlaySettings(context: Context) {
+        val packageUri = Uri.parse("package:${context.packageName}")
+        val candidates = listOf(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri),
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri),
+            Intent(Settings.ACTION_SETTINGS),
+        )
+
+        for (intent in candidates) {
+            if (launch(context, intent)) {
+                return
+            }
+        }
+        XLog.w(TAG, "openOverlaySettings: all overlay settings intents failed")
+    }
+
+    private fun openAppDetailsSettings(context: Context) {
+        val packageUri = Uri.parse("package:${context.packageName}")
+        launch(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
     }
 
     private fun hasStorageAccess(context: Context): Boolean {
@@ -250,10 +277,22 @@ object AppCapabilityCoordinator {
         return powerManager.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    private fun launch(context: Context, intent: Intent) {
-        if (context !is Activity) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun launch(context: Context, intent: Intent): Boolean {
+        return try {
+            if (context !is Activity) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            XLog.w(TAG, "Failed to launch settings intent: ${intent.action}", e)
+            false
+        } catch (e: SecurityException) {
+            XLog.w(TAG, "Security exception launching settings intent: ${intent.action}", e)
+            false
+        } catch (e: Exception) {
+            XLog.w(TAG, "Unexpected error launching settings intent: ${intent.action}", e)
+            false
         }
-        context.startActivity(intent)
     }
 }
