@@ -19,10 +19,10 @@ data class CloudModel(
 )
 
 enum class ModelTier(val stars: String, val label: String) {
-    LITE("\u2606", "Lite"),       // ☆
-    FAST("\u2605", "Fast"),       // ★
-    SMART("\u2605\u2605", "Smart"),     // ★★
-    PRO("\u2605\u2605\u2605", "Pro")    // ★★★
+    LITE("☆", "Lite"),
+    FAST("★", "Fast"),
+    SMART("★★", "Smart"),
+    PRO("★★★", "Pro")
 }
 
 enum class CloudProvider(
@@ -56,6 +56,17 @@ enum class CloudProvider(
         models = listOf(
             CloudModel("gemini-2.5-flash", "Gemini 2.5 Flash", 0.15, 0.60, ModelTier.FAST, 1_000_000, recommended = true),
             CloudModel("gemini-2.5-pro", "Gemini 2.5 Pro", 1.25, 10.00, ModelTier.PRO, 1_000_000),
+        )
+    ),
+    NVIDIA(
+        displayName = "NVIDIA",
+        // NVIDIA API Catalog / NIM endpoint is OpenAI-compatible, so it uses the OpenAI client path.
+        defaultBaseUrl = "https://integrate.api.nvidia.com/v1",
+        models = listOf(
+            CloudModel("meta/llama-3.1-70b-instruct", "Llama 3.1 70B", 0.00, 0.00, ModelTier.SMART, 128_000, recommended = true),
+            CloudModel("meta/llama-3.1-405b-instruct", "Llama 3.1 405B", 0.00, 0.00, ModelTier.PRO, 128_000),
+            CloudModel("nvidia/llama-3.1-nemotron-70b-instruct", "Nemotron 70B", 0.00, 0.00, ModelTier.PRO, 128_000),
+            CloudModel("mistralai/mixtral-8x22b-instruct-v0.1", "Mixtral 8x22B", 0.00, 0.00, ModelTier.SMART, 64_000),
         )
     ),
     CUSTOM(
