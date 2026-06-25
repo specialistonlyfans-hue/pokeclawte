@@ -32,8 +32,13 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("KALI_ORCH_CONFIG", ROOT / "config.json"))
 REPORT_DIR = ROOT / "reports"
 WORKFLOW_DIR = ROOT / "workflows"
+DATA_DIR = ROOT / "storage"
+TARGETS_PATH = DATA_DIR / "targets.json"
+FINDINGS_PATH = DATA_DIR / "findings.jsonl"
+JOBS_PATH = DATA_DIR / "jobs.jsonl"
 REPORT_DIR.mkdir(exist_ok=True)
 WORKFLOW_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "host": "127.0.0.1",
@@ -329,6 +334,77 @@ ACTIONS = {
 }
 
 
+def read_json_file(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def write_json_file(path: Path, data: Any) -> None:
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def append_jsonl(path: Path, item: Dict[str, Any]) -> None:
+    path.parent.mkdir(exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+
+def read_jsonl(path: Path, limit: int = 50) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: List[Dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except Exception:
+            continue
+    rows.reverse()
+    return rows[: max(1, min(int(limit), 200))]
+
+
+def list_targets() -> List[Dict[str, Any]]:
+    targets = read_json_file(TARGETS_PATH, [])
+    out = []
+    for item in targets:
+        value = str(item.get("value", ""))
+        allowed, reason = target_allowed(value) if value else (False, "empty target")
+        copy = dict(item)
+        copy["allowed"] = allowed
+        copy["allow_reason"] = reason
+        out.append(copy)
+    return out
+
+
+def add_target_record(data: Dict[str, Any]) -> Dict[str, Any]:
+    value = safe_target_string(str(data.get("value") or data.get("target") or ""))
+    name = str(data.get("name") or value).strip()[:80]
+    target_type = str(data.get("type") or "host").strip()[:40]
+    notes = str(data.get("notes") or "").strip()[:500]
+    allowed, reason = target_allowed(value)
+    record = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "value": value,
+        "type": target_type,
+        "notes": notes,
+        "created_at": now_iso(),
+        "allowed": allowed,
+        "allow_reason": reason,
+    }
+    targets = read_json_file(TARGETS_PATH, [])
+    targets = [item for item in targets if item.get("value") != value]
+    targets.append(record)
+    write_json_file(TARGETS_PATH, targets)
+    return record
+
+
 def list_workflows() -> Dict[str, Any]:
     items: Dict[str, Any] = {}
     for path in sorted(WORKFLOW_DIR.glob("*.json")):
@@ -434,6 +510,7 @@ def make_report(action: str, target: str, args: Dict[str, Any], result: Dict[str
         "```",
     ]
     md_path.write_text("\n".join(md), encoding="utf-8")
+    write_findings_from_report(doc)
     return {"report_id": report_id, "json": str(json_path), "markdown": str(md_path)}
 
 
@@ -452,6 +529,60 @@ def summarize_result(result: Dict[str, Any]) -> str:
     if "cipher" in result or "not_after" in result:
         return f"TLS certificate valid until {result.get('not_after')} with cipher {result.get('cipher')}"
     return json.dumps(result, ensure_ascii=False)[:1500]
+
+
+def finding_record(report_id: str, target: str, title: str, severity: str, evidence: str) -> Dict[str, Any]:
+    return {
+        "id": str(uuid.uuid4()),
+        "report_id": report_id,
+        "created_at": now_iso(),
+        "target": target,
+        "title": title,
+        "severity": severity,
+        "status": "open",
+        "evidence": evidence[:1200],
+    }
+
+
+def write_findings_from_report(doc: Dict[str, Any]) -> None:
+    report_id = str(doc.get("id", ""))
+    target = str(doc.get("target", ""))
+    result = doc.get("result") or {}
+    findings: List[Dict[str, Any]] = []
+
+    def add(title: str, severity: str, evidence: str) -> None:
+        findings.append(finding_record(report_id, target, title, severity, evidence))
+
+    if "workflow" in result:
+        for step in result.get("steps") or []:
+            if not step.get("ok"):
+                add(f"Workflow step failed: {step.get('action')}", "info", str(step.get("error") or step.get("result") or "step failed"))
+            step_result = step.get("result") or {}
+            if isinstance(step_result, dict):
+                extract_result_findings(step_result, add)
+    else:
+        extract_result_findings(result, add)
+
+    for item in findings:
+        append_jsonl(FINDINGS_PATH, item)
+
+
+def extract_result_findings(result: Dict[str, Any], add) -> None:
+    if result.get("returncode") not in (0, None):
+        add("Check returned an error", "info", str(result.get("error") or result.get("stderr") or result)[:1200])
+    headers = result.get("headers")
+    if isinstance(headers, dict):
+        lower = {str(k).lower(): str(v) for k, v in headers.items()}
+        if "content-security-policy" not in lower:
+            add("Missing Content-Security-Policy header", "low", "HTTP response headers did not include Content-Security-Policy.")
+        if "x-frame-options" not in lower:
+            add("Missing X-Frame-Options header", "low", "HTTP response headers did not include X-Frame-Options.")
+        if "strict-transport-security" not in lower and str(result.get("final_url", "")).startswith("https://"):
+            add("Missing HSTS header", "low", "HTTPS response did not include Strict-Transport-Security.")
+    stdout = str(result.get("stdout") or "")
+    open_lines = [line.strip() for line in stdout.splitlines() if " open " in line.lower()]
+    for line in open_lines[:20]:
+        add("Open network service observed", "info", line)
 
 
 def report_summary(path: Path) -> Dict[str, Any]:
@@ -481,6 +612,33 @@ def list_reports(limit: int = 25) -> List[Dict[str, Any]]:
     return [report_summary(path) for path in paths[:limit]]
 
 
+def list_evidence(limit: int = 50) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    for path in sorted(REPORT_DIR.glob("*.*"), key=lambda p: p.stat().st_mtime, reverse=True)[: max(1, min(limit, 200))]:
+        stat = path.stat()
+        items.append({
+            "id": path.stem,
+            "name": path.name,
+            "path": str(path),
+            "type": path.suffix.lstrip("."),
+            "size_bytes": stat.st_size,
+            "mtime": int(stat.st_mtime),
+        })
+    return items
+
+
+def record_job(kind: str, target: str, status: str, report: Dict[str, str], extra: Dict[str, Any]) -> None:
+    append_jsonl(JOBS_PATH, {
+        "id": str(uuid.uuid4()),
+        "created_at": now_iso(),
+        "kind": kind,
+        "target": target,
+        "status": status,
+        "report_id": report.get("report_id"),
+        "extra": extra,
+    })
+
+
 @APP.get("/health")
 def health():
     return jsonify({"ok": True, "service": "kali-security-orchestrator", "actions": sorted(ACTIONS.keys()), "workflows": sorted(list_workflows().keys()), "time": now_iso()})
@@ -492,6 +650,27 @@ def actions():
     if deny:
         return deny
     return jsonify({"ok": True, "actions": sorted(ACTIONS.keys()), "blocked_actions": POLICY.get("blocked_actions", [])})
+
+
+@APP.get("/targets")
+def targets_index():
+    deny = require_auth()
+    if deny:
+        return deny
+    return jsonify({"ok": True, "targets": list_targets()})
+
+
+@APP.post("/targets")
+def targets_add():
+    deny = require_auth()
+    if deny:
+        return deny
+    data = request.get_json(force=True, silent=False) or {}
+    try:
+        record = add_target_record(data)
+        return jsonify({"ok": True, "target": record})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @APP.get("/workflows")
@@ -515,6 +694,33 @@ def reports_index():
     return jsonify({"ok": True, "reports": list_reports(limit_int)})
 
 
+@APP.get("/findings")
+def findings_index():
+    deny = require_auth()
+    if deny:
+        return deny
+    limit = int(request.args.get("limit", "50") or 50)
+    return jsonify({"ok": True, "findings": read_jsonl(FINDINGS_PATH, limit)})
+
+
+@APP.get("/evidence")
+def evidence_index():
+    deny = require_auth()
+    if deny:
+        return deny
+    limit = int(request.args.get("limit", "50") or 50)
+    return jsonify({"ok": True, "evidence": list_evidence(limit)})
+
+
+@APP.get("/jobs")
+def jobs_index():
+    deny = require_auth()
+    if deny:
+        return deny
+    limit = int(request.args.get("limit", "50") or 50)
+    return jsonify({"ok": True, "jobs": read_jsonl(JOBS_PATH, limit)})
+
+
 @APP.post("/run")
 def run_action():
     deny = require_auth()
@@ -533,7 +739,9 @@ def run_action():
     try:
         result = ACTIONS[action](target, args)
         report = make_report(action, target, args, result)
-        return jsonify({"ok": result.get("returncode", 0) == 0, "action": action, "target": target, "result": result, "report": report})
+        ok = result.get("returncode", 0) == 0
+        record_job("action", target, "ok" if ok else "error", report, {"action": action})
+        return jsonify({"ok": ok, "action": action, "target": target, "result": result, "report": report})
     except PermissionError as exc:
         return jsonify({"ok": False, "error": str(exc), "policy": POLICY}), 403
     except subprocess.TimeoutExpired:
@@ -560,7 +768,9 @@ def run_workflow_endpoint():
     try:
         result = run_workflow(name, target, args)
         report = make_report(f"workflow:{name}", target, args, result)
-        return jsonify({"ok": result.get("returncode", 0) == 0, "workflow": name, "target": target, "result": result, "report": report})
+        ok = result.get("returncode", 0) == 0
+        record_job("workflow", target, "ok" if ok else "error", report, {"workflow": name})
+        return jsonify({"ok": ok, "workflow": name, "target": target, "result": result, "report": report})
     except PermissionError as exc:
         return jsonify({"ok": False, "error": str(exc), "policy": POLICY}), 403
     except FileNotFoundError as exc:
