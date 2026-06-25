@@ -179,6 +179,14 @@ class SettingsActivity : BaseActivity() {
             onClick = {
                 if (AppCapabilityCoordinator.snapshot(this).storageAccessGranted) {
                     Toast.makeText(this, R.string.home_storage_enabled, Toast.LENGTH_SHORT).show()
+                } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                    requestPermissions(
+                        arrayOf(
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        ),
+                        101,
+                    )
                 } else {
                     AppCapabilityCoordinator.openSystemSettings(this, AppRequirement.STORAGE)
                 }
@@ -382,7 +390,7 @@ class SettingsActivity : BaseActivity() {
         permNotification?.setTrailingText(capabilities.notificationPermissionStatusLabel)
         permNotifAccess?.setTrailingText(capabilities.notificationAccessStatusLabel)
         permOverlay?.setTrailingText(if (capabilities.overlayGranted) "Enabled" else "Disabled")
-        permBattery?.setTrailingText(if (capabilities.batteryOptimizationIgnored) "Unrestricted" else "Restricted")
+        permBattery?.setTrailingText(if (capabilities.batteryOptimizationIgnored) "Ignored" else "Restricted")
         permStorage?.setTrailingText(if (capabilities.storageAccessGranted) "Enabled" else "Disabled")
     }
 
@@ -391,18 +399,11 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun refreshGlobalPromptStatus() {
-        val current = KVUtils.getGlobalPrompt()
-        globalPromptItem?.setTrailingText(
-            if (current.isBlank()) getString(R.string.global_prompt_not_set)
-            else getString(R.string.global_prompt_set_status, current.length)
-        )
+        globalPromptItem?.setTrailingText(if (KVUtils.hasGlobalPrompt()) "Custom" else "Default")
     }
 
     private fun refreshCustomModelUrlStatus() {
-        customModelUrlItem?.setTrailingText(
-            if (KVUtils.getCustomLocalModelUrl().isBlank()) getString(R.string.custom_local_model_url_not_set)
-            else getString(R.string.custom_local_model_url_set)
-        )
+        customModelUrlItem?.setTrailingText(if (KVUtils.getString("CUSTOM_LOCAL_MODEL_URL", "").isNotBlank()) "Custom" else "Default")
     }
 
     private fun refreshManageToolsStatus() {
@@ -414,241 +415,96 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun toggleExternalAutomation() {
-        if (KVUtils.isExternalAutomationEnabled()) {
-            KVUtils.setExternalAutomationEnabled(false)
-            refreshExternalAutomation()
-            Toast.makeText(this, "External Automation disabled", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val next = !KVUtils.isExternalAutomationEnabled()
+        KVUtils.setExternalAutomationEnabled(next)
+        refreshExternalAutomation()
+        Toast.makeText(this, if (next) "External automation enabled" else "External automation disabled", Toast.LENGTH_SHORT).show()
+    }
 
-        ConfirmDialog.showWarm(
+    private fun showBudgetDialog() {
+        val options = arrayOf("Low", "Medium", "High", "Unlimited")
+        AlertDialog.show(
             context = this,
-            title = "Enable External Automation?",
-            message = "This lets trusted apps like Tasker, MacroDroid, or ADB start PhoneAgent Lab tasks with explicit Android intents. Keep it off unless you control the automation that will call it.",
-            actionTitle = "Enable",
-            cancelTitle = getString(R.string.common_cancel),
-            onAction = {
-                KVUtils.setExternalAutomationEnabled(true)
-                refreshExternalAutomation()
-                Toast.makeText(this, "External Automation enabled", Toast.LENGTH_SHORT).show()
-            }
+            title = "Task Budget",
+            message = "Choose how much the agent may spend per task.",
+            positiveText = "OK",
+            negativeText = "Cancel",
+            onPositive = { }
         )
     }
 
     private fun showGlobalPromptDialog() {
-        val current = KVUtils.getGlobalPrompt()
         InputDialog.show(
             context = this,
-            title = getString(R.string.global_prompt_dialog_title),
-            presetText = current,
+            title = getString(R.string.global_prompt_title),
             hint = getString(R.string.global_prompt_hint),
-            maxLength = 2000,
-        ) { text ->
-            KVUtils.setGlobalPrompt(text)
-            refreshGlobalPromptStatus()
-            Toast.makeText(this, "Global instructions saved", Toast.LENGTH_SHORT).show()
-        }
+            initialValue = KVUtils.getGlobalPrompt(),
+            positiveText = getString(R.string.common_save),
+            negativeText = getString(R.string.common_cancel),
+            onConfirm = { value ->
+                KVUtils.setGlobalPrompt(value.trim())
+                refreshGlobalPromptStatus()
+                Toast.makeText(this, getString(R.string.common_saved), Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     private fun showCustomModelUrlDialog() {
-        val current = KVUtils.getCustomLocalModelUrl()
         InputDialog.show(
             context = this,
-            title = getString(R.string.custom_local_model_url_dialog_title),
-            presetText = current,
+            title = getString(R.string.custom_local_model_url_title),
             hint = getString(R.string.custom_local_model_url_hint),
-            maxLength = 1000,
-            inputValidate = { text ->
-                val lower = text.trim().lowercase()
-                if (lower.isEmpty() || lower.startsWith("http://") || lower.startsWith("https://")) {
+            initialValue = KVUtils.getString("CUSTOM_LOCAL_MODEL_URL", ""),
+            positiveText = getString(R.string.common_save),
+            negativeText = getString(R.string.common_cancel),
+            validator = { value ->
+                if (value.isBlank() || value.startsWith("http://") || value.startsWith("https://")) {
                     InputDialog.ValidateResult(true, null)
                 } else {
-                    InputDialog.ValidateResult(false, getString(R.string.custom_local_model_url_invalid))
+                    InputDialog.ValidateResult(false, "Use http:// or https://")
                 }
             },
-        ) { text ->
-            val trimmed = text.trim().let { raw ->
-                when {
-                    raw.startsWith("HTTPS://", ignoreCase = false) -> "https://" + raw.substring(8)
-                    raw.startsWith("HTTP://", ignoreCase = false) -> "http://" + raw.substring(7)
-                    else -> raw
-                }
+            onConfirm = { value ->
+                KVUtils.putString("CUSTOM_LOCAL_MODEL_URL", value.trim())
+                refreshCustomModelUrlStatus()
+                Toast.makeText(this, getString(R.string.common_saved), Toast.LENGTH_SHORT).show()
             }
-            KVUtils.setCustomLocalModelUrl(trimmed)
-            refreshCustomModelUrlStatus()
-            Toast.makeText(this, "Custom model URL saved", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun showBudgetDialog() {
-        val currentTokens = io.agents.pokeclaw.agent.TaskBudget.getConfiguredMaxTokens()
-        val currentCost = io.agents.pokeclaw.agent.TaskBudget.getConfiguredMaxCost()
-
-        val layout = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(48, 32, 48, 16)
-        }
-
-        val tokenLabel = android.widget.TextView(this).apply {
-            text = "Max tokens per task"
-            setTextColor(getColor(R.color.colorTextPrimary))
-        }
-        layout.addView(tokenLabel)
-
-        val tokenOptions = arrayOf("Unlimited", "10K", "50K", "100K", "200K", "250K", "500K")
-        val tokenValues = arrayOf<Int?>(null, 10_000, 50_000, 100_000, 200_000, 250_000, 500_000)
-        val selectedTokenIndex = when (currentTokens) {
-            null -> 0
-            else -> tokenValues.indexOfFirst { it == currentTokens }.takeIf { it >= 0 } ?: 0
-        }
-
-        val tokenSpinner = android.widget.Spinner(this).apply {
-            adapter = android.widget.ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, tokenOptions)
-            setSelection(selectedTokenIndex)
-        }
-        layout.addView(tokenSpinner)
-
-        val costLabel = android.widget.TextView(this).apply {
-            text = "\nMax cost per task (USD)"
-            setTextColor(getColor(R.color.colorTextPrimary))
-        }
-        layout.addView(costLabel)
-
-        val costInput = android.widget.EditText(this).apply {
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-            hint = "Blank = no cost cap"
-            setText(currentCost?.let { String.format("%.2f", it) } ?: "")
-            setTextColor(getColor(R.color.colorTextPrimary))
-        }
-        layout.addView(costInput)
-
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Task Budget")
-            .setView(layout)
-            .setPositiveButton("Save") { _, _ ->
-                val newTokens = tokenValues[tokenSpinner.selectedItemPosition]
-                val newCost = costInput.text.toString().trim().toDoubleOrNull()
-
-                when (newTokens) {
-                    null -> io.agents.pokeclaw.agent.TaskBudget.clearMaxTokens()
-                    else -> io.agents.pokeclaw.agent.TaskBudget.saveMaxTokens(newTokens)
-                }
-                when {
-                    newCost == null || newCost <= 0.0 -> io.agents.pokeclaw.agent.TaskBudget.clearMaxCost()
-                    else -> io.agents.pokeclaw.agent.TaskBudget.saveMaxCost(newCost)
-                }
-
-                Toast.makeText(this, "Budget: ${io.agents.pokeclaw.agent.TaskBudget.describeCurrentBudget()}", Toast.LENGTH_SHORT).show()
-                recreate()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun reportBug() {
-        buildSupportBundle("Preparing bug report…") { report ->
-            AlertDialog.show(
-                context = this,
-                title = "Bug report ready",
-                message = "${report.name} is ready. Open GitHub Issue and attach the ZIP file.",
-                actionTitle = "Open GitHub Issue",
-                cancelTitle = "Share ZIP",
-                onAction = { openGitHubIssue(report) },
-                onCancel = {
-                    shareReportFile(
-                        report = report,
-                        chooserTitle = "Share bug report ZIP",
-                        subject = "PhoneAgent Lab bug report ${io.agents.pokeclaw.BuildConfig.VERSION_NAME}",
-                        body = "Attach this ZIP to your GitHub issue."
-                    )
-                }
-            )
-        }
+        )
     }
 
     private fun shareDebugReport() {
-        buildSupportBundle("Preparing debug report…") { report ->
-            shareReportFile(
-                report = report,
-                chooserTitle = "Share debug report",
-                subject = "PhoneAgent Lab debug report ${io.agents.pokeclaw.BuildConfig.VERSION_NAME}",
-                body = "Attach this debug report when reporting an issue."
-            )
-        }
-    }
-
-    private fun buildSupportBundle(preparingToast: String, onReportReady: (java.io.File) -> Unit) {
         lifecycleScope.launch {
-            Toast.makeText(this@SettingsActivity, preparingToast, Toast.LENGTH_SHORT).show()
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    DebugReportManager.buildReport(this@SettingsActivity)
-                }
-            }.onSuccess { report ->
-                onReportReady(report)
-            }.onFailure { error ->
-                XLog.e("SettingsActivity", "Failed to build debug report", error)
-                Toast.makeText(this@SettingsActivity, "Failed to build debug report", Toast.LENGTH_LONG).show()
+            try {
+                val report = withContext(Dispatchers.IO) { DebugReportManager.createReport(this@SettingsActivity) }
+                val uri = FileProvider.getUriForFile(
+                    this@SettingsActivity,
+                    "${packageName}.fileprovider",
+                    report
+                )
+                startActivity(
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "application/zip"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                )
+            } catch (e: Exception) {
+                XLog.e("SettingsActivity", "Failed to share debug report", e)
+                Toast.makeText(this@SettingsActivity, "Failed to share report: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    private fun openGitHubIssue(report: java.io.File) {
-        val issueUri = "https://github.com/specialistonlyfans-hue/pokeclawte/issues/new".toUri()
-            .buildUpon()
-            .appendQueryParameter("title", "[Bug] ${Build.MANUFACTURER} ${Build.MODEL} - ")
-            .appendQueryParameter("body", buildGitHubIssueBody(report))
-            .build()
+    private fun reportBug() {
+        val url = "https://github.com/specialistonlyfans-hue/pokeclawte/issues/new"
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, issueUri))
-            Toast.makeText(this, "Attach ${report.name} to the GitHub issue after the page opens", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(this, "No app available to open GitHub", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, url, Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun buildGitHubIssueBody(report: java.io.File): String {
-        return """
-            ## What happened
-            -
-
-            ## What you expected
-            -
-
-            ## Exact steps to reproduce
-            1.
-            2.
-            3.
-
-            ## Device
-            - Manufacturer: ${Build.MANUFACTURER}
-            - Model: ${Build.MODEL}
-            - Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})
-
-            ## Attachments
-            - Attach this ZIP from PhoneAgent Lab: `${report.name}`
-
-            Generated by PhoneAgent Lab ${io.agents.pokeclaw.BuildConfig.VERSION_NAME}.
-        """.trimIndent()
-    }
-
-    private fun shareReportFile(report: java.io.File, chooserTitle: String, subject: String, body: String) {
-        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", report)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/zip"
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, body)
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        try {
-            startActivity(Intent.createChooser(intent, chooserTitle))
-        } catch (e: ActivityNotFoundException) {
-            Toast.makeText(this, "No app available to share the report", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun applyThemeToGroups(tc: io.agents.pokeclaw.ui.chat.ThemeManager.ChatColors) {
+    private fun applyThemeToGroups(colors: io.agents.pokeclaw.ui.chat.ThemeManager.ThemeColors) {
         val groups = listOf(
             R.id.permissionsGroup,
             R.id.channelGroup,
@@ -658,23 +514,12 @@ class SettingsActivity : BaseActivity() {
             R.id.remoteGroup,
             R.id.aboutGroup
         )
-        for (id in groups) {
-            val group = findViewById<MenuGroup>(id) ?: continue
-            group.setTitleColor(tc.aiText)
-            group.setCardBackgroundColor(tc.toolbarBg)
-            for (i in 0 until group.getMenuItemCount()) {
-                group.getMenuItemAt(i)?.apply {
-                    setTitleColor(tc.aiText)
-                    setTrailingTextColor(tc.sendColor)
-                    setLeadingIconColor(tc.aiText)
-                    setTrailingIconColor(tc.aiText)
+        groups.forEach { id ->
+            findViewById<MenuGroup>(id)?.let { group ->
+                for (i in 0 until group.childCount) {
+                    group.getChildAt(i)?.setBackgroundColor(colors.surface)
                 }
             }
-        }
-        findViewById<CommonToolbar>(R.id.toolbar)?.apply {
-            setBackgroundColor(tc.toolbarBg)
-            setTitleColor(tc.aiText)
-            findViewById<android.widget.ImageView>(R.id.ivBack)?.setColorFilter(tc.aiText)
         }
     }
 }
