@@ -1,0 +1,49 @@
+{
+  "host": "127.0.0.1",
+  "port": 8899,
+  "api_token": "CHANGE_ME",
+  "runner_mode": "local",
+  "ssh": {
+    "host": "192.168.1.50",
+    "user": "kali",
+    "port": 22,
+    "key_path": "~/.ssh/id_ed25519"
+  },
+  "policy": {
+    "allowed_targets": [
+      "127.0.0.1/32",
+      "192.168.1.0/24",
+      "10.0.0.0/24",
+      "scanme.nmap.org"
+    ],
+    "max_top_ports": 200,
+    "default_top_ports": 100,
+    "timeout_seconds": 90,
+    "require_token": true,
+    "lab_mode": false,
+    "blocked_actions": [
+      "exploit",
+      "bruteforce",
+      "phishing",
+      "deauth",
+      "malware",
+      "payload",
+      "credential_attack"
+    ],
+    "blocked_keywords": [
+      "hydra",
+      "john",
+      "hashcat",
+      "msfconsole",
+      "msfvenom",
+      "airmon-ng",
+      "aireplay-ng",
+      "ettercap",
+      "bettercap",
+      "evilginx",
+      "gophish",
+      "setoolkit",
+      "beef-xss"
+    ]
+  }
+}
