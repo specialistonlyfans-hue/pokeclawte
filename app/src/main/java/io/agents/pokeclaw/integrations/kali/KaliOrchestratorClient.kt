@@ -23,12 +23,13 @@ class KaliOrchestratorClient(private val context: Context) {
     data class ParsedCommand(
         val kind: Kind,
         val action: String? = null,
+        val workflow: String? = null,
         val target: String? = null,
         val topPorts: Int = 50,
         val url: String? = null,
         val token: String? = null,
     ) {
-        enum class Kind { HELP, STATUS, CONFIG, CLEAR, RUN }
+        enum class Kind { HELP, STATUS, CONFIG, CLEAR, RUN, WORKFLOW }
     }
 
     companion object {
@@ -68,13 +69,17 @@ class KaliOrchestratorClient(private val context: Context) {
             Status:
             /kali status
 
-            Aktionen:
+            Einzel-Aktionen:
             /kali ping 192.168.1.20
             /kali dns_check scanme.nmap.org
             /kali web_check http://192.168.1.20
             /kali tls_check example.com
             /kali scan_host 192.168.1.20 50
             /kali service_inventory 192.168.1.20 50
+
+            Workflows:
+            /kali workflow quick_host 192.168.1.20 50
+            /kali workflow web_audit http://192.168.1.20 50
 
             Aliase:
             dns, web, web_headers, tls, inventory
@@ -104,6 +109,17 @@ class KaliOrchestratorClient(private val context: Context) {
             val token = parts.getOrNull(2)
             return ParsedCommand(ParsedCommand.Kind.CONFIG, url = url, token = token)
         }
+        if (first == "workflow" || first == "wf") {
+            val workflow = parts.getOrNull(1)
+            val target = parts.getOrNull(2)
+            val topPorts = parts.getOrNull(3)?.toIntOrNull()?.coerceIn(1, 200) ?: 50
+            return ParsedCommand(
+                kind = ParsedCommand.Kind.WORKFLOW,
+                workflow = workflow,
+                target = target,
+                topPorts = topPorts,
+            )
+        }
 
         val action = normalizeAction(first)
         val target = parts.getOrNull(1)
@@ -123,6 +139,7 @@ class KaliOrchestratorClient(private val context: Context) {
             ParsedCommand.Kind.CLEAR -> clear()
             ParsedCommand.Kind.CONFIG -> configure(parsed.url, parsed.token)
             ParsedCommand.Kind.RUN -> runAction(parsed.action, parsed.target, parsed.topPorts)
+            ParsedCommand.Kind.WORKFLOW -> runWorkflow(parsed.workflow, parsed.target, parsed.topPorts)
         }
     }
 
@@ -152,6 +169,7 @@ class KaliOrchestratorClient(private val context: Context) {
         }
         val health = getJson("/health", includeToken = false)
         val actions = getJson("/actions", includeToken = true)
+        val workflows = getJson("/workflows", includeToken = true)
         return buildString {
             appendLine("Kali-Orchestrator Status")
             appendLine("URL: ${baseUrl()}")
@@ -161,6 +179,9 @@ class KaliOrchestratorClient(private val context: Context) {
             appendLine()
             appendLine("Actions:")
             appendLine(shortJson(actions))
+            appendLine()
+            appendLine("Workflows:")
+            appendLine(shortJson(workflows))
         }.trim()
     }
 
@@ -184,6 +205,25 @@ class KaliOrchestratorClient(private val context: Context) {
 
         val response = postJson("/run", payload)
         return formatRunResponse(response)
+    }
+
+    private fun runWorkflow(workflow: String?, target: String?, topPorts: Int): String {
+        if (workflow.isNullOrBlank()) {
+            return "Workflow fehlt. Beispiel: /kali workflow quick_host 192.168.1.20 50"
+        }
+        if (target.isNullOrBlank()) {
+            return "Target fehlt. Beispiel: /kali workflow $workflow 192.168.1.20 50"
+        }
+        val token = token()
+        if (token.isBlank()) {
+            return "Kali-Orchestrator nicht konfiguriert. Nutze: /kali config http://KALI_IP:8899 DEIN_TOKEN"
+        }
+        val payload = JSONObject()
+            .put("workflow", workflow)
+            .put("target", target)
+            .put("args", JSONObject().put("top_ports", topPorts))
+        val response = postJson("/workflow", payload)
+        return formatWorkflowResponse(response)
     }
 
     private fun normalizeAction(action: String): String {
@@ -210,7 +250,7 @@ class KaliOrchestratorClient(private val context: Context) {
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 10_000
-            readTimeout = 140_000
+            readTimeout = 180_000
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Orchestrator-Token", token())
@@ -258,6 +298,34 @@ class KaliOrchestratorClient(private val context: Context) {
             appendLine()
             appendLine(summary)
         }.trim()
+    }
+
+    private fun formatWorkflowResponse(data: JSONObject): String {
+        if (!data.optBoolean("ok", false)) {
+            return "Kali workflow failed: ${data.optString("error", data.toString()).take(2500)}"
+        }
+        val workflow = data.optString("workflow", "n/a")
+        val target = data.optString("target", "n/a")
+        val report = data.optJSONObject("report")
+        val result = data.optJSONObject("result") ?: JSONObject()
+        val reportId = report?.optString("report_id", "n/a") ?: "n/a"
+        val stepsOk = result.optInt("steps_ok", 0)
+        val stepsTotal = result.optInt("steps_total", 0)
+        val steps = result.optJSONArray("steps")
+        val lines = mutableListOf<String>()
+        lines.add("Kali workflow result")
+        lines.add("Workflow: $workflow")
+        lines.add("Target: $target")
+        lines.add("Steps: $stepsOk/$stepsTotal OK")
+        lines.add("Report: $reportId")
+        lines.add("")
+        if (steps != null) {
+            for (i in 0 until minOf(steps.length(), 8)) {
+                val step = steps.optJSONObject(i) ?: continue
+                lines.add("- ${step.optString("id")}: ${step.optString("action")} ok=${step.optBoolean("ok")}")
+            }
+        }
+        return lines.joinToString("\n")
     }
 
     private fun shortJson(obj: JSONObject): String = obj.toString(2).take(1800)
