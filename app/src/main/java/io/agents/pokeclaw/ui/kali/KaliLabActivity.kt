@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -130,7 +129,7 @@ private fun KaliLabScreen(
                 when (selectedTab) {
                     0 -> RunTab(running = running, onRun = ::submit)
                     1 -> WorkflowTab(running = running, onRun = ::submit)
-                    2 -> ReportsTab(output = output)
+                    2 -> ReportsTab(running = running, output = output, onRun = ::submit)
                     3 -> SettingsTab(running = running, onRun = ::submit)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -227,15 +226,35 @@ private fun WorkflowTab(running: Boolean, onRun: (String) -> Unit) {
 }
 
 @Composable
-private fun ReportsTab(output: String) {
-    SectionCard(title = "Latest Result") {
-        Text("The latest UI/chat result is shown below. Server-side reports are stored on the Kali Orchestrator in reports/<id>.json and reports/<id>.md.")
+private fun ReportsTab(running: Boolean, output: String, onRun: (String) -> Unit) {
+    var reportId by remember { mutableStateOf("") }
+
+    SectionCard(title = "Reports") {
+        Text("Load recent reports from the Kali Orchestrator, then paste an ID to open details.")
         Spacer(modifier = Modifier.height(8.dp))
-        Text(output.take(1200), fontFamily = FontFamily.Monospace)
+        Button(
+            enabled = !running,
+            onClick = { onRun("/kali reports") },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (running) "Loading…" else "Load Reports") }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = reportId,
+            onValueChange = { reportId = it.trim() },
+            label = { Text("Report ID") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            enabled = !running && reportId.isNotBlank(),
+            onClick = { onRun("/kali report $reportId") },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Open Report") }
     }
     Spacer(modifier = Modifier.height(12.dp))
-    SectionCard(title = "Next Report UI") {
-        Text("Next upgrade: add /reports index endpoint, report list, report viewer, findings table and evidence library.")
+    SectionCard(title = "Latest Result") {
+        Text(output.take(1600), fontFamily = FontFamily.Monospace)
     }
 }
 
