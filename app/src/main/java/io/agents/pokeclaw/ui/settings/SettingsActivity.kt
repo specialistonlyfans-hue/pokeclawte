@@ -436,10 +436,9 @@ class SettingsActivity : BaseActivity() {
             context = this,
             title = getString(R.string.global_prompt_title),
             hint = getString(R.string.global_prompt_hint),
-            initialValue = KVUtils.getGlobalPrompt(),
-            positiveText = getString(R.string.common_save),
-            negativeText = getString(R.string.common_cancel),
-            onConfirm = { value ->
+            presetText = KVUtils.getGlobalPrompt(),
+            confirmText = getString(R.string.common_save),
+            onComplete = { value ->
                 KVUtils.setGlobalPrompt(value.trim())
                 refreshGlobalPromptStatus()
                 Toast.makeText(this, getString(R.string.common_saved), Toast.LENGTH_SHORT).show()
@@ -452,17 +451,16 @@ class SettingsActivity : BaseActivity() {
             context = this,
             title = getString(R.string.custom_local_model_url_title),
             hint = getString(R.string.custom_local_model_url_hint),
-            initialValue = KVUtils.getString("CUSTOM_LOCAL_MODEL_URL", ""),
-            positiveText = getString(R.string.common_save),
-            negativeText = getString(R.string.common_cancel),
-            validator = { value ->
+            presetText = KVUtils.getString("CUSTOM_LOCAL_MODEL_URL", ""),
+            confirmText = getString(R.string.common_save),
+            inputValidate = { value ->
                 if (value.isBlank() || value.startsWith("http://") || value.startsWith("https://")) {
                     InputDialog.ValidateResult(true, null)
                 } else {
                     InputDialog.ValidateResult(false, "Use http:// or https://")
                 }
             },
-            onConfirm = { value ->
+            onComplete = { value ->
                 KVUtils.putString("CUSTOM_LOCAL_MODEL_URL", value.trim())
                 refreshCustomModelUrlStatus()
                 Toast.makeText(this, getString(R.string.common_saved), Toast.LENGTH_SHORT).show()
