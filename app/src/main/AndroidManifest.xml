@@ -64,6 +64,11 @@
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize" />
         <activity
+            android:name=".ui.kali.KaliLabActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".ui.settings.ThemeActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
@@ -158,32 +163,22 @@
             android:foregroundServiceType="specialUse" />
 
         <!-- 定时守护 -->
-        <service
-            android:name=".service.KeepAliveJobService"
-            android:enabled="true"
-            android:exported="false"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
-
-        <!-- 开机自启动 -->
         <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+                <data android:scheme="package" />
             </intent-filter>
         </receiver>
 
-        <!-- Debug: trigger tasks via ADB broadcast -->
-        <receiver
-            android:name=".debug.TaskTriggerReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="io.agents.pokeclaw.TASK" />
-            </intent-filter>
-        </receiver>
-
+        <service
+            android:name=".service.KeepAliveJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true" />
     </application>
 
 </manifest>
