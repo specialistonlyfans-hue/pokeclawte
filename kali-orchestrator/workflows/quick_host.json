@@ -1,0 +1,29 @@
+{
+  "name": "quick_host",
+  "description": "Safe quick inventory workflow for one authorized host.",
+  "default_args": {
+    "top_ports": 50
+  },
+  "steps": [
+    {
+      "id": "dns",
+      "action": "dns_check"
+    },
+    {
+      "id": "ping",
+      "action": "ping"
+    },
+    {
+      "id": "web",
+      "action": "web_check"
+    },
+    {
+      "id": "tls",
+      "action": "tls_check"
+    },
+    {
+      "id": "scan",
+      "action": "scan_host"
+    }
+  ]
+}
