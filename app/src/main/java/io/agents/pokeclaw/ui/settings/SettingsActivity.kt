@@ -424,10 +424,10 @@ class SettingsActivity : BaseActivity() {
         AlertDialog.show(
             context = this,
             title = "Task Budget",
-            message = "Choose how much the agent may spend per task.",
-            positiveText = "OK",
-            negativeText = "Cancel",
-            onPositive = { }
+            message = "Current budget: ${io.agents.pokeclaw.agent.TaskBudget.describeCurrentBudget()}",
+            actionTitle = "OK",
+            cancelTitle = null,
+            onAction = { }
         )
     }
 
