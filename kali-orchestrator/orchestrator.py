@@ -4,6 +4,9 @@ Kali Security Orchestrator.
 
 Purpose: authorized security lab and own-systems inventory.
 Design: no arbitrary shell, target allowlist, action allowlist, JSON/Markdown reports.
+
+This intentionally does NOT implement autonomous exploitation, credential attacks,
+phishing, deauth/Wi-Fi disruption, malware, payload generation, or stealth.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import time
 import uuid
@@ -65,11 +69,20 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "gophish",
             "setoolkit",
             "beef-xss",
+            "sqlmap",
         ],
     },
 }
 
 APP = Flask(__name__)
+
+
+def deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> None:
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_update(base[key], value)
+        else:
+            base[key] = value
 
 
 def load_config() -> Dict[str, Any]:
@@ -81,14 +94,6 @@ def load_config() -> Dict[str, Any]:
     cfg["host"] = os.getenv("KALI_ORCH_HOST", str(cfg.get("host", "127.0.0.1")))
     cfg["port"] = int(os.getenv("KALI_ORCH_PORT", str(cfg.get("port", 8899))))
     return cfg
-
-
-def deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> None:
-    for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            deep_update(base[key], value)
-        else:
-            base[key] = value
 
 
 CONFIG = load_config()
@@ -128,7 +133,7 @@ def target_host(target: str) -> str:
 
 def resolve_host(host: str) -> List[str]:
     try:
-        return list({item[4][0] for item in socket.getaddrinfo(host, None)})
+        return sorted({item[4][0] for item in socket.getaddrinfo(host, None)})
     except Exception:
         return []
 
@@ -179,6 +184,10 @@ def check_command_safe(cmd: List[str]) -> None:
             raise PermissionError(f"blocked command keyword: {keyword}")
 
 
+def shell_quote(s: str) -> str:
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+
+
 def run_cmd(cmd: List[str], timeout: Optional[int] = None) -> Dict[str, Any]:
     check_command_safe(cmd)
     timeout = timeout or int(POLICY.get("timeout_seconds", 90))
@@ -190,8 +199,9 @@ def run_cmd(cmd: List[str], timeout: Optional[int] = None) -> Dict[str, Any]:
         user = ssh_cfg.get("user", "kali")
         port = str(ssh_cfg.get("port", 22))
         key_path = os.path.expanduser(str(ssh_cfg.get("key_path", "~/.ssh/id_ed25519")))
+        if not host:
+            raise RuntimeError("runner_mode=ssh but ssh.host is empty")
         remote = f"{user}@{host}"
-        # Quote each arg safely for remote POSIX shell.
         remote_cmd = " ".join(shell_quote(part) for part in cmd)
         full_cmd = ["ssh", "-i", key_path, "-p", port, "-o", "BatchMode=yes", remote, remote_cmd]
     else:
@@ -209,10 +219,6 @@ def run_cmd(cmd: List[str], timeout: Optional[int] = None) -> Dict[str, Any]:
     }
 
 
-def shell_quote(s: str) -> str:
-    return "'" + s.replace("'", "'\"'\"'") + "'"
-
-
 def action_ping(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
     host = target_host(safe_target_string(target))
     check_action_allowed("ping", host)
@@ -222,18 +228,18 @@ def action_ping(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 def action_dns(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
     host = target_host(safe_target_string(target))
-    check_action_allowed("dns", host)
+    check_action_allowed("dns_check", host)
     ips = resolve_host(host)
     return {"host": host, "resolved_ips": ips, "returncode": 0 if ips else 1, "stdout": "\n".join(ips), "stderr": ""}
 
 
-def action_web_headers(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
+def action_web_check(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
     target = safe_target_string(target)
-    check_action_allowed("web_headers", target)
+    check_action_allowed("web_check", target)
     url = target if "://" in target else f"http://{target}"
     start = time.time()
     try:
-        r = requests.get(url, timeout=10, allow_redirects=True, verify=False)
+        r = requests.get(url, timeout=10, allow_redirects=True)
         return {
             "url": url,
             "final_url": r.url,
@@ -249,13 +255,38 @@ def action_web_headers(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
         return {"url": url, "returncode": 1, "error": str(exc), "duration_seconds": round(time.time() - start, 3)}
 
 
+def action_tls_check(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    host = target_host(safe_target_string(target))
+    check_action_allowed("tls_check", host)
+    port = int(args.get("port") or 443)
+    start = time.time()
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, port), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert()
+                cipher = ssock.cipher()
+        return {
+            "host": host,
+            "port": port,
+            "subject": cert.get("subject"),
+            "issuer": cert.get("issuer"),
+            "not_before": cert.get("notBefore"),
+            "not_after": cert.get("notAfter"),
+            "cipher": cipher,
+            "returncode": 0,
+            "duration_seconds": round(time.time() - start, 3),
+        }
+    except Exception as exc:
+        return {"host": host, "port": port, "returncode": 1, "error": str(exc), "duration_seconds": round(time.time() - start, 3)}
+
+
 def action_scan_host(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
     host = target_host(safe_target_string(target))
     check_action_allowed("scan_host", host)
     top_ports = int(args.get("top_ports") or POLICY.get("default_top_ports", 100))
     top_ports = max(1, min(top_ports, int(POLICY.get("max_top_ports", 200))))
     nmap = shutil.which("nmap") or "nmap"
-    # Safe service inventory: TCP connect scan + light version detection, limited port count.
     cmd = [
         nmap,
         "-Pn",
@@ -270,19 +301,29 @@ def action_scan_host(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
     return run_cmd(cmd, timeout=int(POLICY.get("timeout_seconds", 90)))
 
 
-def action_inventory(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
+def action_service_inventory(target: str, args: Dict[str, Any]) -> Dict[str, Any]:
     host = target_host(safe_target_string(target))
-    check_action_allowed("inventory", host)
-    out = {"dns": action_dns(host, {}), "ping": action_ping(host, {}), "scan_host": action_scan_host(host, args)}
+    check_action_allowed("service_inventory", host)
+    out = {
+        "dns_check": action_dns(host, {}),
+        "ping": action_ping(host, {}),
+        "scan_host": action_scan_host(host, args),
+    }
     return {"returncode": 0, "inventory": out}
 
 
 ACTIONS = {
     "ping": action_ping,
     "dns": action_dns,
-    "web_headers": action_web_headers,
+    "dns_check": action_dns,
+    "web": action_web_check,
+    "web_check": action_web_check,
+    "web_headers": action_web_check,
+    "tls": action_tls_check,
+    "tls_check": action_tls_check,
     "scan_host": action_scan_host,
-    "inventory": action_inventory,
+    "inventory": action_service_inventory,
+    "service_inventory": action_service_inventory,
 }
 
 
@@ -332,6 +373,8 @@ def summarize_result(result: Dict[str, Any]) -> str:
         return f"HTTP {result.get('status_code')} from {result.get('final_url')} server={result.get('server')}"
     if "resolved_ips" in result:
         return "Resolved IPs: " + ", ".join(result.get("resolved_ips") or [])
+    if "cipher" in result or "not_after" in result:
+        return f"TLS certificate valid until {result.get('not_after')} with cipher {result.get('cipher')}"
     return json.dumps(result, ensure_ascii=False)[:1500]
 
 
