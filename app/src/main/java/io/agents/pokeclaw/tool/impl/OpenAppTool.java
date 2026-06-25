@@ -171,35 +171,42 @@ public class OpenAppTool extends BaseTool {
 
     private String resolveAppName(String appName) {
         String lower = appName.toLowerCase().trim();
-        // Common app name → package name mapping
+        // Common app name → package name mapping. Prefer installed variants when an app has multiple official packages.
         switch (lower) {
-            case "whatsapp": return "com.whatsapp";
-            case "telegram": return "org.telegram.messenger";
-            case "instagram": return "com.instagram.android";
-            case "youtube": return "com.google.android.youtube";
-            case "chrome": return "com.android.chrome";
-            case "camera": return "com.android.camera2";
+            case "whatsapp":
+            case "whats app":
+            case "wa":
+                return firstInstalledPackage("com.whatsapp", "com.whatsapp.w4b");
+            case "whatsapp business":
+            case "wa business":
+            case "business whatsapp":
+                return firstInstalledPackage("com.whatsapp.w4b", "com.whatsapp");
+            case "telegram": return firstInstalledPackage("org.telegram.messenger", "org.thunderdog.challegram", "org.telegram.messenger.web");
+            case "instagram": return firstInstalledPackage("com.instagram.android");
+            case "youtube": return firstInstalledPackage("com.google.android.youtube");
+            case "chrome": return firstInstalledPackage("com.android.chrome", "com.google.android.apps.chrome");
+            case "camera": return firstInstalledPackage("com.android.camera2", "com.google.android.GoogleCamera", "com.sec.android.app.camera");
             case "settings": return "com.android.settings";
-            case "messages": return "com.google.android.apps.messaging";
-            case "gmail": return "com.google.android.gm";
-            case "maps": return "com.google.android.apps.maps";
-            case "phone": return "com.google.android.dialer";
-            case "contacts": return "com.google.android.contacts";
-            case "calendar": return "com.google.android.calendar";
-            case "clock": return "com.google.android.deskclock";
-            case "calculator": return "com.google.android.calculator";
-            case "files": return "com.google.android.documentsui";
-            case "photos": return "com.google.android.apps.photos";
-            case "spotify": return "com.spotify.music";
-            case "twitter": case "x": return "com.twitter.android";
-            case "facebook": return "com.facebook.katana";
-            case "tiktok": return "com.zhiliaoapp.musically";
-            case "snapchat": return "com.snapchat.android";
-            case "reddit": return "com.reddit.frontpage";
-            case "discord": return "com.discord";
-            case "slack": return "com.Slack";
-            case "wechat": return "com.tencent.mm";
-            case "line": return "jp.naver.line.android";
+            case "messages": return firstInstalledPackage("com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms");
+            case "gmail": return firstInstalledPackage("com.google.android.gm");
+            case "maps": return firstInstalledPackage("com.google.android.apps.maps");
+            case "phone": return firstInstalledPackage("com.google.android.dialer", "com.samsung.android.dialer", "com.android.dialer");
+            case "contacts": return firstInstalledPackage("com.google.android.contacts", "com.samsung.android.contacts", "com.android.contacts");
+            case "calendar": return firstInstalledPackage("com.google.android.calendar", "com.samsung.android.calendar");
+            case "clock": return firstInstalledPackage("com.google.android.deskclock", "com.sec.android.app.clockpackage");
+            case "calculator": return firstInstalledPackage("com.google.android.calculator", "com.sec.android.app.popupcalculator");
+            case "files": return firstInstalledPackage("com.google.android.documentsui", "com.google.android.apps.nbu.files");
+            case "photos": return firstInstalledPackage("com.google.android.apps.photos");
+            case "spotify": return firstInstalledPackage("com.spotify.music");
+            case "twitter": case "x": return firstInstalledPackage("com.twitter.android");
+            case "facebook": return firstInstalledPackage("com.facebook.katana");
+            case "tiktok": return firstInstalledPackage("com.zhiliaoapp.musically");
+            case "snapchat": return firstInstalledPackage("com.snapchat.android");
+            case "reddit": return firstInstalledPackage("com.reddit.frontpage");
+            case "discord": return firstInstalledPackage("com.discord");
+            case "slack": return firstInstalledPackage("com.Slack");
+            case "wechat": return firstInstalledPackage("com.tencent.mm");
+            case "line": return firstInstalledPackage("jp.naver.line.android");
             default: break;
         }
         // Try to find by searching installed app labels AND package names
@@ -246,6 +253,20 @@ public class OpenAppTool extends BaseTool {
             XLog.w(TAG, "resolveAppName: failed to search installed apps", e);
         }
         return null;
+    }
+
+    private static String firstInstalledPackage(String... packageNames) {
+        android.content.pm.PackageManager pm = ClawApplication.Companion.getInstance().getPackageManager();
+        for (String packageName : packageNames) {
+            if (packageName == null || packageName.isEmpty()) continue;
+            try {
+                if (pm.getLaunchIntentForPackage(packageName) != null) {
+                    return packageName;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return packageNames.length > 0 ? packageNames[0] : null;
     }
 
     /**
