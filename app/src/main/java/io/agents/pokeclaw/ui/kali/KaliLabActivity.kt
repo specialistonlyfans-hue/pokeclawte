@@ -161,7 +161,7 @@ private fun RunTab(running: Boolean, onRun: (String) -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = topPorts,
-            onValueChange = { topPorts = it.filter(Char::isDigit).take(3) },
+            onValueChange = { topPorts = it.filter { ch -> ch.isDigit() }.take(3) },
             label = { Text("Top ports") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -206,7 +206,7 @@ private fun WorkflowTab(running: Boolean, onRun: (String) -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = topPorts,
-            onValueChange = { topPorts = it.filter(Char::isDigit).take(3) },
+            onValueChange = { topPorts = it.filter { ch -> ch.isDigit() }.take(3) },
             label = { Text("Top ports") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
