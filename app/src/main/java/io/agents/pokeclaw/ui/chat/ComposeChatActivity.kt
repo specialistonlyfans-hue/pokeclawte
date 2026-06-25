@@ -12,8 +12,14 @@ import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.align
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import io.agents.pokeclaw.TaskEvent
 import io.agents.pokeclaw.agent.llm.ModelConfigRepository
 import io.agents.pokeclaw.automation.ExternalAutomationContract
@@ -143,62 +149,75 @@ class ComposeChatActivity : ComponentActivity() {
         setContent {
             val activeTasks by activeTaskShellController.activeTasks.collectAsState()
 
-            ChatScreen(
-                messages = _messages.toList(),
-                modelStatus = _modelStatus.value,
-                needsPermission = _needsPermission.value,
-                isAwaitingReply = _isAwaitingReply.value,
-                isTaskRunning = _isTaskRunning.value,
-                inputEnabled = _inputEnabled.value,
-                isDownloading = _isDownloading.value,
-                downloadProgress = _downloadProgress.value,
-                isLocalModel = _isLocalModelActive.value,
-                sessionTokens = _sessionTokens.value,
-                sessionCost = _sessionCost.value,
-                onSendChat = { sendChat(it) },
-                onSendTask = { taskFlowController.sendTask(it) },
-                onStartMonitor = { target -> taskFlowController.startMonitor(target) },
-                onSendDirectMessage = { contact, app, message ->
-                    taskFlowController.sendTask("send \"$message\" to $contact on $app")
-                },
-                onNewChat = { newChat() },
-                onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
-                onOpenModels = { startActivity(Intent(this, LlmConfigActivity::class.java)) },
-                onFixPermissions = { startActivity(Intent(this, SettingsActivity::class.java)) },
-                onAttach = { Toast.makeText(this, "Image upload coming soon", Toast.LENGTH_SHORT).show() },
-                conversations = _conversations.toList(),
-                onSelectConversation = { loadConversation(it) },
-                onDeleteConversation = { conv ->
-                    val deleted = conversationStore.deleteConversation(conv)
-                    XLog.i(TAG, "Delete conversation: ${conv.file.absolutePath} deleted=$deleted")
-                    refreshSidebarHistory()
-                },
-                onRenameConversation = { conv, newName ->
-                    val renamed = conversationStore.renameConversation(conv, newName)
-                    XLog.i(TAG, "Rename conversation: '${conv.title}' → '$newName' renamed=$renamed")
-                    refreshSidebarHistory()
-                },
-                activeTasks = activeTasks,
-                onStopTask = { contact ->
-                    _isTaskRunning.value = appViewModel.isTaskRunning()
-                    Toast.makeText(
-                        this,
-                        activeTaskShellController.stopTask(contact),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                },
-                onStopAllTasks = {
-                    _isAwaitingReply.value = false
-                    _isTaskRunning.value = false
-                    Toast.makeText(
-                        this,
-                        activeTaskShellController.stopAllTasks(),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                },
-                onModelSwitch = { modelId, displayName -> switchModel(modelId, displayName) },
-                colors = composeColors,
-            )
+            Box {
+                ChatScreen(
+                    messages = _messages.toList(),
+                    modelStatus = _modelStatus.value,
+                    needsPermission = _needsPermission.value,
+                    isAwaitingReply = _isAwaitingReply.value,
+                    isTaskRunning = _isTaskRunning.value,
+                    inputEnabled = _inputEnabled.value,
+                    isDownloading = _isDownloading.value,
+                    downloadProgress = _downloadProgress.value,
+                    isLocalModel = _isLocalModelActive.value,
+                    sessionTokens = _sessionTokens.value,
+                    sessionCost = _sessionCost.value,
+                    onSendChat = { sendChat(it) },
+                    onSendTask = { taskFlowController.sendTask(it) },
+                    onStartMonitor = { target -> taskFlowController.startMonitor(target) },
+                    onSendDirectMessage = { contact, app, message ->
+                        taskFlowController.sendTask("send \"$message\" to $contact on $app")
+                    },
+                    onNewChat = { newChat() },
+                    onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
+                    onOpenModels = { startActivity(Intent(this, LlmConfigActivity::class.java)) },
+                    onFixPermissions = { startActivity(Intent(this, SettingsActivity::class.java)) },
+                    onAttach = { Toast.makeText(this, "Image upload coming soon", Toast.LENGTH_SHORT).show() },
+                    conversations = _conversations.toList(),
+                    onSelectConversation = { loadConversation(it) },
+                    onDeleteConversation = { conv ->
+                        val deleted = conversationStore.deleteConversation(conv)
+                        XLog.i(TAG, "Delete conversation: ${conv.file.absolutePath} deleted=$deleted")
+                        refreshSidebarHistory()
+                    },
+                    onRenameConversation = { conv, newName ->
+                        val renamed = conversationStore.renameConversation(conv, newName)
+                        XLog.i(TAG, "Rename conversation: '${conv.title}' → '$newName' renamed=$renamed")
+                        refreshSidebarHistory()
+                    },
+                    activeTasks = activeTasks,
+                    onStopTask = { contact ->
+                        _isTaskRunning.value = appViewModel.isTaskRunning()
+                        Toast.makeText(
+                            this,
+                            activeTaskShellController.stopTask(contact),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onStopAllTasks = {
+                        _isAwaitingReply.value = false
+                        _isTaskRunning.value = false
+                        Toast.makeText(
+                            this,
+                            activeTaskShellController.stopAllTasks(),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onModelSwitch = { modelId, displayName -> switchModel(modelId, displayName) },
+                    colors = composeColors,
+                )
+
+                if (!_isDownloading.value) {
+                    PromptModelPickerOverlay(
+                        isLocalModel = _isLocalModelActive.value,
+                        onModelSwitch = { modelId, displayName -> switchModel(modelId, displayName) },
+                        colors = composeColors,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 78.dp),
+                    )
+                }
+            }
         }
 
         refreshSidebarHistory()
@@ -235,7 +254,6 @@ class ComposeChatActivity : ComponentActivity() {
         // Debug: auto-trigger task from ADB intent
         // Usage: adb shell am start -n io.agents.pokeclaw/.ui.chat.ComposeChatActivity --es task "open my camera"
         handleIntentAutomation(intent, initialDelayMs = 2000)
-
     }
 
     override fun onNewIntent(intent: Intent) {
