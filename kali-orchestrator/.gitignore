@@ -1,0 +1,8 @@
+config.json
+reports/
+*.log
+*.pid
+.venv/
+__pycache__/
+*.pyc
+.env
